@@ -11,7 +11,7 @@ depends=('glibc>=2.39' 'gcc-libs' 'gtk3' 'webkit2gtk-4.1' 'libayatana-appindicat
 provides=('afterglow')
 conflicts=('afterglow')
 options=('!strip' '!debug')
-source=("afterglow-${pkgver}-linux-x86_64.tar.gz::${url}/releases/download/v${pkgver}/afterglow-${pkgver}-linux-x86_64.tar.gz")
+source=("afterglow-${pkgver}-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v${pkgver}-packages/releases/v${pkgver}/afterglow-${pkgver}-linux-x86_64.tar.gz")
 sha256sums=('3f23be66fe20a8d5e2ca347f6bffc7d505c26cd4d88c1fdb463071178e911403')
 
 package() {

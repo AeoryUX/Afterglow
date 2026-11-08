@@ -20,7 +20,7 @@ pkgbase = afterglow-bin
 	conflicts = afterglow
 	options = !strip
 	options = !debug
-	source = afterglow-0.1.1-linux-x86_64.tar.gz::https://github.com/AeoryUX/afterglow/releases/download/v0.1.1/afterglow-0.1.1-linux-x86_64.tar.gz
+	source = afterglow-0.1.1-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v0.1.1-packages/releases/v0.1.1/afterglow-0.1.1-linux-x86_64.tar.gz
 	sha256sums = 3f23be66fe20a8d5e2ca347f6bffc7d505c26cd4d88c1fdb463071178e911403
 
 pkgname = afterglow-bin

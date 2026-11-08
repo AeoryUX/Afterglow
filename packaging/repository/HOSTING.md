@@ -1,32 +1,21 @@
-# Signed pacman repository
+# Afterglow signed pacman repository
 
-AUR registration is temporarily closed. This signed repository is an alternative route to the same installer command. It does not create or bypass an AUR account.
+Stable server: https://raw.githubusercontent.com/AeoryUX/Afterglow/packages
 
-After one-time repository setup, users can run:
-
-```bash
-paru -S afterglow-bin
-```
-
-## Hosting needed
-
-Create the empty public GitHub repository AeoryUX/afterglow and grant the connected GitHub app access if required. Publish the GPL application source and a versioned source/binary release first. Create a separate release tagged `arch-repository`, then upload every file from `afterglow-arch-repo/` to it. Pacman uses the stable HTTPS download path for that release.
-
-The repository contains afterglow-bin 0.1.1-2, its detached signature, signed pacman database and file database, public signing key/fingerprint, and setup script. The private signing key is retained in the protected work directory and is not in these deliverables. Preserve that private key in maintainer-controlled secure storage before relying on this repository for ongoing releases.
-
-## One-time client setup
-
-Download and review `setup-afterglow-repo.sh`, verify its pinned fingerprint against `afterglow-signing-key.fingerprint`, then run:
+One-time setup (review the downloaded script first):
 
 ```bash
+curl -fL https://raw.githubusercontent.com/AeoryUX/Afterglow/packages/setup-afterglow-repo.sh -o setup-afterglow-repo.sh
 sudo bash setup-afterglow-repo.sh
 paru -S afterglow-bin
 ```
 
-The setup checks the downloaded public key fingerprint and database signature before adding the key to pacman's trust store. It creates /etc/pacman.d/afterglow.conf with `SigLevel = Required`, adds one Include line to pacman.conf, and syncs only the new repository. It does not install a kernel driver or update the other repository databases. Keep the rest of an Arch/CachyOS system up to date through the normal system upgrade workflow.
+This is a signed pacman repository, separate from the AUR. No AUR account is needed. The setup pins the public signing key, verifies the database, locally trusts the publisher key, creates /etc/pacman.d/afterglow.conf with SigLevel=Required, adds one Include line to pacman.conf, and syncs only this repository. It does not install a kernel module or upgrade other repository databases.
 
-Review/removal: remove the Include line and /etc/pacman.d/afterglow.conf to stop using this repository. If removing trust as well, use `pacman-key --delete FINGERPRINT` with the fingerprint from the public key file. Removing repository configuration does not remove installed clips or preferences.
+Publisher fingerprint: 0BD7BEF64831B7CD5EA167C5952EE3DFB307F111
 
-## Publication status
+GPL source: https://github.com/AeoryUX/Afterglow
 
-The repository files are prepared and checked locally. They are not hosted yet, and the one-time setup URL will not work until the GitHub release assets exist. The GitHub connection rejected repository creation, so the repository owner must create AeoryUX/afterglow or grant suitable creation access first.
+Versioned native archives and corresponding source are under releases/. Database and package signatures are provided. SHA256SUMS supplies additional file-integrity checks. The private signing key is excluded from this repository and all downloads.
+
+Afterglow is an alpha. Real NVIDIA/Wayland capture and game performance still need hardware validation; cloud UI/RAM tests used a simulated recorder. A working NVIDIA kernel driver remains part of the existing system setup.

@@ -5,7 +5,7 @@ set -euo pipefail
 [[ $EUID == 0 ]] || { echo 'Run: sudo bash setup-afterglow-repo.sh' >&2; exit 1; }
 [[ $(uname -m) == x86_64 && -f /etc/pacman.conf ]] || { echo 'This repository targets x86_64 Arch/CachyOS.' >&2; exit 1; }
 for command in curl gpg gpgv pacman pacman-key install grep; do command -v "$command" >/dev/null || { echo "Missing command: $command" >&2; exit 1; }; done
-server='https://github.com/AeoryUX/afterglow/releases/download/arch-repository'
+server='https://raw.githubusercontent.com/AeoryUX/Afterglow/packages'
 expected_fingerprint='0BD7BEF64831B7CD5EA167C5952EE3DFB307F111'
 stage="$(mktemp -d)"
 trap 'rm -rf -- "$stage"' EXIT
