@@ -20,3 +20,5 @@ Versioned native archives and corresponding source are under releases/. Database
 Afterglow is an alpha. Real NVIDIA/Wayland capture and game performance still need hardware validation; cloud UI/RAM tests used a simulated recorder. A working NVIDIA kernel driver remains part of the existing system setup.
 
 After initial setup, both `yay -S afterglow-bin` and `paru -S afterglow-bin` work. Use --setup-only to add the repository without installing.
+
+Version 0.1.2 fixes launcher file permissions and Caelestia theme/update handling. Existing users can update with `paru -Syu afterglow-bin` or `yay -Syu afterglow-bin`. Close and reopen the launcher after updating.
