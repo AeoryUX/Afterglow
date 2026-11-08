@@ -22,8 +22,6 @@ After setup, either helper can install/manage the package:
 
 For repository setup without installing, use `sudo bash afterglow-install.sh --setup-only`.
 
-Debian/Ubuntu (apt) and Fedora/RPM installers are deferred until their capture-backend dependencies and platform behavior are tested.
-
 This uses the project's signed pacman repository. An AUR account is not needed. AUR registration is temporarily closed; the AUR recipe remains available for future submission.
 
 The setup pins publisher fingerprint `0BD7BEF64831B7CD5EA167C5952EE3DFB307F111`, verifies the repository signature, imports and locally trusts that key, adds `/etc/pacman.d/afterglow.conf`, and syncs only this repository. Package and database signatures are required. Keep your normal Arch/CachyOS system upgrades current.

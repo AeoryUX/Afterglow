@@ -12,7 +12,7 @@ Afterglow 0.1.1 alpha now has an AppImage and an Arch binary package.
 2. The AppImage payload (AppDir) launches with its bundled GTK/WebKit stack, handles simulated capture/save/stop, runs host FFmpeg for trim/duration, and plays MP4 video to readyState 4.
 3. The final AppImage itself passes the same native WebKit WebDriver flow using the runtime's extract-and-run mode. No FUSE device is available in the cloud environment, so FUSE mounting was not tested.
 4. Both the payload and final AppImage's `--save-replay` command signal a user-owned GPU Screen Recorder executable fixture and reject a negative PID. This works without opening a desktop window.
-5. Pacman 7/libalpm 15 accepts the Arch package metadata and lists its installed paths. The package has root ownership metadata, `.PKGINFO`, and a gzip-compressed `.MTREE`. Full installation on CachyOS was not performed in this Debian cloud environment.
+5. Pacman 7/libalpm 15 accepts the Arch package metadata and lists its installed paths. The package has root ownership metadata, `.PKGINFO`, and a gzip-compressed `.MTREE`. Full installation on CachyOS was not performed in this cloud environment.
 6. Native release, Arch package, AppImage, and source ZIP have SHA-256 checksums.
 
 The AppImage uses the official Tauri/linuxdeploy toolchain with GTK and GStreamer bundling. In this rootless build environment, a local configuration supplies the installed WebKit subprocess files and libav playback plugin from a sysroot. Those files are placed under standard paths inside the image. Unlike the earlier bare-executable cloud QA, this final AppImage test uses its own bundled WebKit helpers and libraries.

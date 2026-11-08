@@ -1,6 +1,6 @@
 # Afterglow 0.1.1 alpha validation
 
-Validated on 2026-11-07 in a Debian x86_64 cloud build environment. The target desktop remains CachyOS + Hyprland + NVIDIA GTX 1660 Super.
+Validated on 2026-11-07 in a Linux x86_64 cloud build environment. The target desktop remains CachyOS + Hyprland + NVIDIA GTX 1660 Super.
 
 ## Passed
 
