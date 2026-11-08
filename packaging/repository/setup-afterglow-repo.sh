@@ -2,6 +2,20 @@
 # One-time setup for the Afterglow signed pacman repository.
 # Review this script and the expected fingerprint before running with sudo.
 set -euo pipefail
+mode="${1:-setup}"
+install_app=0
+case "$mode" in
+    --install) install_app=1 ;;
+    setup|--setup-only) ;;
+    --help|-h)
+        cat <<'HELP'
+Usage: sudo bash setup-afterglow-repo.sh [--install|--setup-only]
+--install configures the signed repository and installs Afterglow plus dependencies.
+--setup-only configures the repository so yay, paru, or pacman can install it later.
+HELP
+        exit 0 ;;
+    *) echo 'Use --install or --setup-only.' >&2; exit 2 ;;
+esac
 [[ $EUID == 0 ]] || { echo 'Run: sudo bash setup-afterglow-repo.sh' >&2; exit 1; }
 [[ $(uname -m) == x86_64 && -f /etc/pacman.conf ]] || { echo 'This repository targets x86_64 Arch/CachyOS.' >&2; exit 1; }
 for command in curl gpg gpgv pacman pacman-key install grep; do command -v "$command" >/dev/null || { echo "Missing command: $command" >&2; exit 1; }; done
@@ -44,3 +58,7 @@ Include = /etc/pacman.d/afterglow.conf
 CONFIG
 pacman --config "$stage/pacman.conf" -Sy
 printf '\nRepository configured. Install with: paru -S afterglow-bin\n'
+
+if [[ $install_app == 1 ]]; then
+    pacman -S --needed afterglow-bin
+fi

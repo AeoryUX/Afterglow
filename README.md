@@ -4,18 +4,25 @@ A gameplay clipping app for Linux, targeting CachyOS + Hyprland and NVIDIA first
 
 ## Install on CachyOS / Arch Linux
 
-Add the signed repository once. Download and review the setup script, then run it:
+One-time setup and installation in one command:
 
 ```bash
-curl -fL https://raw.githubusercontent.com/AeoryUX/Afterglow/packages/setup-afterglow-repo.sh -o setup-afterglow-repo.sh
-sudo bash setup-afterglow-repo.sh
+curl -fsSL https://raw.githubusercontent.com/AeoryUX/Afterglow/packages/install-afterglow.sh -o afterglow-install.sh && sudo bash afterglow-install.sh --install
 ```
 
-Install Afterglow and its declared app dependencies:
+The download must complete successfully before the installer runs. You can review the downloaded script before running it with sudo.
 
-```bash
-paru -S afterglow-bin
-```
+After setup, either helper can install/manage the package:
+
+| Package manager | Install command |
+| --- | --- |
+| paru | `paru -S afterglow-bin` |
+| yay | `yay -S afterglow-bin` |
+| pacman | `sudo pacman -S afterglow-bin` |
+
+For repository setup without installing, use `sudo bash afterglow-install.sh --setup-only`.
+
+Debian/Ubuntu (apt) and Fedora/RPM installers are deferred until their capture-backend dependencies and platform behavior are tested.
 
 This uses the project's signed pacman repository. An AUR account is not needed. AUR registration is temporarily closed; the AUR recipe remains available for future submission.
 
