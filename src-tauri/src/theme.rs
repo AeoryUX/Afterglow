@@ -3,7 +3,7 @@ use std::{
     collections::BTreeMap,
     fs,
     io::Read,
-    os::unix::fs::MetadataExt,
+    os::unix::fs::{MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -83,7 +83,14 @@ pub fn read(path: &Path, cache: &Cache) -> Theme {
         }
     }
     let result = (|| {
-        let file = fs::File::open(path).map_err(|_| "Caelestia scheme not found".to_string())?;
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(path)
+            .map_err(|_| "Caelestia scheme not found".to_string())?;
+        if !file.metadata().map_err(|e| e.to_string())?.is_file() {
+            return Err("Caelestia scheme must be a regular file".into());
+        }
         let mut data = String::new();
         file.take(65537)
             .read_to_string(&mut data)

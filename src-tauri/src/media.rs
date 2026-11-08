@@ -1,5 +1,4 @@
 use std::{
-    fs::File,
     io::{Read, Seek, SeekFrom},
     path::PathBuf,
     sync::{
@@ -75,7 +74,7 @@ impl MediaServer {
                 let token = token.clone();
                 let limit = limit.clone();
                 std::thread::spawn(move || {
-                    serve(request, &root, &token);
+                    serve(request, &root, &token, &address.to_string());
                     limit.fetch_sub(1, Ordering::SeqCst);
                 });
             }
@@ -90,7 +89,34 @@ impl MediaServer {
         )
     }
 }
-fn serve(request: tiny_http::Request, root: &std::path::Path, token: &str) {
+fn serve(request: tiny_http::Request, root: &std::path::Path, token: &str, address: &str) {
+    let hosts = request
+        .headers()
+        .iter()
+        .filter(|h| h.field.equiv("Host"))
+        .collect::<Vec<_>>();
+    if hosts.len() != 1 || hosts[0].value.as_str() != address {
+        let _ = request.respond(Response::empty(403));
+        return;
+    }
+    let origins = request
+        .headers()
+        .iter()
+        .filter(|h| h.field.equiv("Origin"))
+        .collect::<Vec<_>>();
+    if origins.len() > 1
+        || origins
+            .first()
+            .map(|h| h.value.as_str())
+            .is_some_and(|origin| {
+                origin != "tauri://localhost"
+                    && !(cfg!(debug_assertions) && origin == "http://localhost:1420")
+            })
+    {
+        let _ = request.respond(Response::empty(403));
+        return;
+    }
+
     if request.method() != &Method::Get && request.method() != &Method::Head {
         let _ = request.respond(Response::empty(405));
         return;
@@ -104,11 +130,7 @@ fn serve(request: tiny_http::Request, root: &std::path::Path, token: &str) {
         let _ = request.respond(Response::empty(404));
         return;
     };
-    let Ok(path) = crate::clips::clip_path(root, &name) else {
-        let _ = request.respond(Response::empty(404));
-        return;
-    };
-    let Ok(mut file) = File::open(path) else {
+    let Ok(mut file) = crate::clips::open_clip(root, &name) else {
         let _ = request.respond(Response::empty(404));
         return;
     };
@@ -137,6 +159,7 @@ fn serve(request: tiny_http::Request, root: &std::path::Path, token: &str) {
         header("Content-Type", "video/mp4"),
         header("Accept-Ranges", "bytes"),
         header("Cache-Control", "no-store"),
+        header("X-Content-Type-Options", "nosniff"),
         header("Cross-Origin-Resource-Policy", "cross-origin"),
     ];
     if partial {
@@ -217,6 +240,17 @@ mod tests {
             socket.read_to_string(&mut out).unwrap();
             out
         };
+        assert!(request(
+            &server.url("A play.mp4"),
+            "Origin: https://example.invalid\r\n"
+        )
+        .starts_with("HTTP/1.1 403"));
+        assert!(
+            request(&server.url("A play.mp4"), "Host: example.invalid\r\n")
+                .starts_with("HTTP/1.1 403")
+        );
+        std::os::unix::fs::symlink("/etc/passwd", root.join("link.mp4")).unwrap();
+        assert!(request(&server.url("link.mp4"), "").starts_with("HTTP/1.1 404"));
         let result = request(&server.url("A play.mp4"), "Range: bytes=2-5\r\n");
         assert!(result.starts_with("HTTP/1.1 206"));
         assert!(result.ends_with("2345"));

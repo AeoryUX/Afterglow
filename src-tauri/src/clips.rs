@@ -1,11 +1,5 @@
 use serde::Serialize;
-use std::{
-    ffi::CString,
-    fs,
-    os::unix::ffi::OsStrExt,
-    path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{fs, path::Path, time::UNIX_EPOCH};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,14 +21,11 @@ pub fn validate_name(name: &str) -> Result<(), String> {
     }
     Ok(())
 }
-pub fn clip_path(root: &Path, name: &str) -> Result<PathBuf, String> {
+pub fn open_clip(root: &Path, name: &str) -> Result<fs::File, String> {
     validate_name(name)?;
-    let path = root.join(name);
-    let meta = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
-    if !meta.file_type().is_file() {
-        return Err("Only regular clips in the library can be edited".into());
-    }
-    Ok(path)
+    crate::private_fs::Directory::open(root)
+        .and_then(|dir| dir.read(name))
+        .map_err(|e| e.to_string())
 }
 pub fn list(root: &Path) -> Result<Vec<Clip>, String> {
     let mut clips = Vec::new();
@@ -43,12 +34,13 @@ pub fn list(root: &Path) -> Result<Vec<Clip>, String> {
         if e.file_name().to_string_lossy().starts_with('.') {
             continue;
         }
-        if !e.file_type().map_err(|e| e.to_string())?.is_file()
-            || e.path().extension().and_then(|s| s.to_str()) != Some("mp4")
-        {
+        let Some(name) = e.file_name().to_str().map(str::to_owned) else {
             continue;
-        }
-        let m = e.metadata().map_err(|e| e.to_string())?;
+        };
+        let Ok(file) = open_clip(root, &name) else {
+            continue;
+        };
+        let m = file.metadata().map_err(|e| e.to_string())?;
         if m.len() == 0 {
             continue;
         }
@@ -68,49 +60,41 @@ pub fn list(root: &Path) -> Result<Vec<Clip>, String> {
     Ok(clips)
 }
 pub fn rename(root: &Path, name: &str, new_name: &str) -> Result<(), String> {
-    let old = clip_path(root, name)?;
+    validate_name(name)?;
     validate_name(new_name)?;
+    let dir = crate::private_fs::Directory::open(root).map_err(|e| e.to_string())?;
+    // Rename is anchored to this directory and never follows a source symlink.
+    dir.read(name).map_err(|e| e.to_string())?;
     if name == new_name {
         return Ok(());
     }
-    let old = CString::new(old.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
-    let new =
-        CString::new(root.join(new_name).as_os_str().as_bytes()).map_err(|e| e.to_string())?;
-    // Linux atomic rename that cannot overwrite another clip.
-    if unsafe {
-        libc::renameat2(
-            libc::AT_FDCWD,
-            old.as_ptr(),
-            libc::AT_FDCWD,
-            new.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    } != 0
-    {
-        return Err(format!(
-            "Cannot rename clip: {}",
-            std::io::Error::last_os_error()
-        ));
-    }
-    Ok(())
+    dir.rename(name, new_name, true)
+        .map_err(|e| format!("Cannot rename clip: {e}"))
 }
-pub fn duration(path: &Path) -> Result<f64, String> {
-    let out = crate::system::command("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-        ])
-        .arg(path)
-        .output()
-        .map_err(|e| format!("Cannot run ffprobe (install ffmpeg): {e}"))?;
-    if !out.status.success() {
-        return Err("Clip is still being written or cannot be read by FFprobe".into());
-    }
-    let duration: f64 = String::from_utf8_lossy(&out.stdout)
+static MEDIA_JOB: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub fn duration(root: &Path, name: &str) -> Result<f64, String> {
+    let _job = MEDIA_JOB
+        .try_lock()
+        .map_err(|_| "Another video operation is running. Try again when it finishes.")?;
+    probe(open_clip(root, name)?)
+}
+fn probe(source: fs::File) -> Result<f64, String> {
+    let mut command = crate::processing::command("ffprobe", source);
+    command.args([
+        "-v",
+        "error",
+        "-protocol_whitelist",
+        "file",
+        "-f",
+        "mov",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        "/proc/self/fd/0",
+    ]);
+    let out = crate::processing::run(command, std::time::Duration::from_secs(10))?;
+    let duration: f64 = String::from_utf8_lossy(&out)
         .trim()
         .parse()
         .map_err(|_| "Cannot read clip duration")?;
@@ -132,30 +116,43 @@ pub fn validate_trim(start: f64, end: f64, length: f64) -> Result<(), String> {
     Ok(())
 }
 pub fn trim(root: &Path, name: &str, start: f64, end: f64) -> Result<String, String> {
-    let source = clip_path(root, name)?;
-    validate_trim(start, end, duration(&source)?)?;
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_nanos();
-    let output_name = format!("trim-{stamp}.mp4");
-    let output = root.join(format!(".trim-{stamp}.mp4"));
-    let log = root.join(format!(".trim-{stamp}.log"));
-    let stderr = fs::File::create(&log).map_err(|e| e.to_string())?;
-    // Re-encode for frame-accurate cuts. Capture continues using NVENC independently.
-    let result = crate::system::command("ffmpeg")
-        .args([
+    use std::{
+        io::{Seek, SeekFrom},
+        process::Stdio,
+    };
+    let _job = MEDIA_JOB
+        .try_lock()
+        .map_err(|_| "Another video operation is running. Try again when it finishes.")?;
+    let mut source = open_clip(root, name)?;
+    validate_trim(
+        start,
+        end,
+        probe(source.try_clone().map_err(|e| e.to_string())?)?,
+    )?;
+    source.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+    let dir = crate::private_fs::Directory::open(root).map_err(|e| e.to_string())?;
+    let temporary = crate::private_fs::temporary_name("trim").map_err(|e| e.to_string())?;
+    let output_name = format!("{}.mp4", temporary.trim_start_matches('.'));
+    let output = dir.create(&temporary).map_err(|e| e.to_string())?;
+    let result = (|| {
+        let mut command = crate::processing::command("ffmpeg", source);
+        command.stdout(Stdio::from(output));
+        command.args([
             "-hide_banner",
             "-loglevel",
             "error",
             "-nostdin",
-            "-n",
+            "-y",
+            "-protocol_whitelist",
+            "file",
+            "-threads",
+            "2",
+            "-f",
+            "mov",
             "-ss",
             &start.to_string(),
             "-i",
-        ])
-        .arg(&source)
-        .args([
+            "/proc/self/fd/0",
             "-t",
             &(end - start).to_string(),
             "-map",
@@ -172,29 +169,19 @@ pub fn trim(root: &Path, name: &str, start: f64, end: f64) -> Result<String, Str
             "2",
             "-c:a",
             "aac",
+            "-f",
+            "mp4",
             "-movflags",
             "+faststart",
-        ])
-        .arg(&output)
-        .stderr(stderr)
-        .stdout(std::process::Stdio::null())
-        .status();
-    let details = fs::read_to_string(&log).unwrap_or_default();
-    let _ = fs::remove_file(log);
-    match result {
-        Ok(status) if status.success() => {
-            fs::rename(&output, root.join(&output_name)).map_err(|e| e.to_string())?;
-            Ok(output_name)
-        }
-        result => {
-            let _ = fs::remove_file(output);
-            Err(format!(
-                "Trim failed. Check FFmpeg/libx264 installation. {} {}",
-                result.err().map(|e| e.to_string()).unwrap_or_default(),
-                details.chars().take(1000).collect::<String>()
-            ))
-        }
-    }
+            "/proc/self/fd/1",
+        ]);
+        crate::processing::run(command, std::time::Duration::from_secs(600))?;
+        dir.rename(&temporary, &output_name, true)
+            .map_err(|e| e.to_string())?;
+        Ok(output_name)
+    })();
+    dir.remove(&temporary);
+    result
 }
 #[cfg(test)]
 mod tests {
@@ -239,7 +226,7 @@ mod tests {
         rename(&root, "first.mp4", "renamed.mp4").unwrap();
         assert!(!root.join("first.mp4").exists());
         std::os::unix::fs::symlink(root.join("second.mp4"), root.join("link.mp4")).unwrap();
-        assert!(clip_path(&root, "link.mp4").is_err());
+        assert!(open_clip(&root, "link.mp4").is_err());
         assert_eq!(list(&root).unwrap().len(), 2);
         fs::remove_dir_all(root).unwrap();
     }
@@ -248,6 +235,7 @@ mod tests {
 #[cfg(test)]
 mod media_tests {
     use super::*;
+    use std::time::SystemTime;
     #[test]
     #[ignore = "requires ffmpeg with libx264 and ffprobe"]
     fn exports_a_precise_trim_and_preserves_source() {
@@ -288,7 +276,7 @@ mod media_tests {
         assert!(status.success());
         let original = fs::read(&source).unwrap();
         let output = trim(&root, "original.mp4", 1.0, 2.5).unwrap();
-        assert!((duration(&root.join(output)).unwrap() - 1.5).abs() < 0.15);
+        assert!((duration(&root, &output).unwrap() - 1.5).abs() < 0.15);
         assert_eq!(fs::read(&source).unwrap(), original);
         assert_eq!(list(&root).unwrap().len(), 2);
         assert!(trim(&root, "original.mp4", 0.0, 100.0).is_err());

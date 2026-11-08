@@ -1,5 +1,7 @@
 Afterglow third-party notices
 
+GLib Rust 0.18.5 includes Afterglow's two-line backport of the upstream RUSTSEC-2024-0429 mutable out-pointer fix. Corresponding source, the original MIT license, and patch notes are in src-tauri/vendor/glib.
+
 Collected Rust and npm dependency license files. System library notices are included under usr/share/doc in the AppImage. Each dependency keeps its respective license.
 
 ========================================================================

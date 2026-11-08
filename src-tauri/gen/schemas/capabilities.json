@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"","local":true,"windows":["main"],"permissions":["core:default"]}}
+{"default":{"identifier":"default","description":"","local":true,"windows":["main"],"permissions":["core:event:allow-listen","core:event:allow-unlisten","allow-status","allow-start-replay","allow-save-replay","allow-stop-replay","allow-list-clips","allow-rename-clip","allow-clip-duration","allow-clip-media-url","allow-trim-clip","allow-open-library","allow-capture-options","allow-game-mode"]}}

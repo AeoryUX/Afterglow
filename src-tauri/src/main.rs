@@ -3,6 +3,8 @@ mod clips;
 mod launcher;
 mod media;
 mod memory;
+mod private_fs;
+mod processing;
 mod system;
 mod theme;
 use serde::{Deserialize, Serialize};
@@ -69,7 +71,8 @@ fn output_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .or_else(|_| app.path().home_dir().map(|home| home.join("Videos")))
         .map_err(|e| e.to_string())?
         .join("Afterglow");
-    fs::create_dir_all(&p).map_err(|e| e.to_string())?;
+    fs::create_dir_all(p.parent().ok_or("Missing video directory")?).map_err(|e| e.to_string())?;
+    private_fs::Directory::private(&p).map_err(|e| e.to_string())?;
     Ok(p)
 }
 fn runtime_dir() -> Result<PathBuf, String> {
@@ -136,7 +139,8 @@ fn status_inner(
     };
     let log = (|| -> std::io::Result<String> {
         use std::io::{Read, Seek, SeekFrom};
-        let mut file = fs::File::open(log_path(app).map_err(std::io::Error::other)?)?;
+        let path = log_path(app).map_err(std::io::Error::other)?;
+        let mut file = private_fs::Directory::open(path.parent().unwrap())?.read("capture.log")?;
         let size = file.metadata()?.len();
         file.seek(SeekFrom::Start(size.saturating_sub(16384)))?;
         let mut bytes = Vec::new();
@@ -290,7 +294,10 @@ fn start_replay_inner(
             }
         }
     }
-    let log = fs::File::create(log_path(&app)?).map_err(|e| e.to_string())?;
+    let path = log_path(&app)?;
+    let log = private_fs::Directory::private(path.parent().ok_or("Missing log directory")?)
+        .and_then(|dir| dir.private_log("capture.log"))
+        .map_err(|e| e.to_string())?;
     let mut command = system::command("gpu-screen-recorder");
     command
         .args(args)
@@ -314,7 +321,9 @@ fn start_replay_inner(
     let mut child = command
         .spawn()
         .map_err(|e| format!("Cannot launch gpu-screen-recorder: {e}"))?;
-    if let Err(e) = fs::write(pid_path, child.id().to_string()) {
+    if let Err(e) = private_fs::Directory::open(pid_path.parent().unwrap()).and_then(|dir| {
+        dir.atomic_write("afterglow-recorder.pid", child.id().to_string().as_bytes())
+    }) {
         let _ = child.kill();
         let _ = child.wait();
         return Err(e.to_string());
@@ -392,13 +401,13 @@ fn clip_media_url(
     media: State<media::MediaServer>,
     name: String,
 ) -> Result<String, String> {
-    clips::clip_path(&output_dir(&app)?, &name)?;
+    clips::open_clip(&output_dir(&app)?, &name)?;
     Ok(media.url(&name))
 }
 #[tauri::command]
 async fn clip_duration(app: tauri::AppHandle, name: String) -> Result<f64, String> {
-    let path = clips::clip_path(&output_dir(&app)?, &name)?;
-    tauri::async_runtime::spawn_blocking(move || clips::duration(&path))
+    let root = output_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || clips::duration(&root, &name))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -462,14 +471,25 @@ async fn capture_options() -> Result<Vec<String>, String> {
 }
 fn save_from_cli() -> Result<(), String> {
     use std::os::unix::{ffi::OsStrExt, fs::MetadataExt};
-    let pid: i32 = fs::read_to_string(runtime_dir()?.join("afterglow-recorder.pid"))
-        .map_err(|_| "Afterglow replay is not running")?
-        .trim()
-        .parse()
-        .map_err(|_| "Invalid recorder PID")?;
+    use std::{
+        io::Read,
+        os::fd::{AsRawFd, FromRawFd, OwnedFd},
+    };
+    let runtime = runtime_dir()?;
+    let mut text = String::new();
+    private_fs::Directory::open(&runtime)
+        .and_then(|dir| dir.read("afterglow-recorder.pid"))
+        .and_then(|file| file.take(32).read_to_string(&mut text))
+        .map_err(|_| "Afterglow replay is not running")?;
+    let pid: i32 = text.trim().parse().map_err(|_| "Invalid recorder PID")?;
     if pid <= 0 {
         return Err("Invalid recorder PID".into());
     }
+    let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) } as i32;
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    let pidfd = unsafe { OwnedFd::from_raw_fd(fd) };
     let process = PathBuf::from(format!("/proc/{pid}"));
     if fs::metadata(&process).map_err(|e| e.to_string())?.uid() != unsafe { libc::getuid() } {
         return Err("Recorder belongs to another user".into());
@@ -482,7 +502,16 @@ fn save_from_cli() -> Result<(), String> {
     {
         return Err("Saved PID is not GPU Screen Recorder".into());
     }
-    if unsafe { libc::kill(pid, libc::SIGUSR1) } != 0 {
+    if unsafe {
+        libc::syscall(
+            libc::SYS_pidfd_send_signal,
+            pidfd.as_raw_fd(),
+            libc::SIGUSR1,
+            std::ptr::null::<libc::siginfo_t>(),
+            0,
+        )
+    } != 0
+    {
         return Err(std::io::Error::last_os_error().to_string());
     }
     println!("Replay save requested");
@@ -623,7 +652,22 @@ fn start_memory_monitor(app: tauri::AppHandle) {
         }
     });
 }
+fn initialize_security(uid: u32) -> Result<(), String> {
+    if uid == 0 {
+        return Err("Run Afterglow as your normal desktop user, without sudo.".into());
+    }
+    Ok(())
+}
 fn main() {
+    // Apply before creating any WebKit, capture, or editing threads/processes.
+    if let Err(error) = initialize_security(unsafe { libc::geteuid() }) {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
+    unsafe {
+        libc::umask(0o077);
+    }
+
     if std::env::args().any(|arg| arg == "--version" || arg == "-V") {
         println!("Afterglow {}", env!("CARGO_PKG_VERSION"));
         return;
@@ -644,6 +688,10 @@ fn main() {
         return;
     }
     tauri::Builder::default()
+        .plugin(tauri::plugin::Builder::<tauri::Wry>::new("navigation-policy").on_navigation(|_,url| {
+            (url.scheme()=="tauri" && url.host_str()==Some("localhost")) ||
+            (cfg!(debug_assertions) && url.scheme()=="http" && url.host_str()==Some("localhost") && url.port()==Some(1420))
+        }).build())
         .setup(|app| {
             let root = output_dir(app.handle()).map_err(std::io::Error::other)?;
             app.manage(media::MediaServer::start(root).map_err(std::io::Error::other)?);
@@ -721,6 +769,21 @@ mod tests {
             system_audio: true,
             microphone: false,
         }
+    }
+    #[test]
+    fn patched_glib_string_iterator_is_safe() {
+        use webkit2gtk::glib::variant::ToVariant;
+        let value = vec!["one", "two", "three", "four"].to_variant();
+        let mut iter = value.array_iter_str().unwrap();
+        assert_eq!(iter.next(), Some("one"));
+        assert_eq!(iter.next_back(), Some("four"));
+        assert_eq!(iter.nth(1), Some("three"));
+        assert_eq!(value.array_iter_str().unwrap().last(), Some("four"));
+    }
+    #[test]
+    fn refuses_root_execution() {
+        assert!(initialize_security(0).is_err());
+        assert!(initialize_security(1000).is_ok());
     }
     #[test]
     fn validates_settings() {

@@ -177,6 +177,150 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the capture_options command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-capture-options",
+          "markdownDescription": "Enables the capture_options command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the clip_duration command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-clip-duration",
+          "markdownDescription": "Enables the clip_duration command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the clip_media_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-clip-media-url",
+          "markdownDescription": "Enables the clip_media_url command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the game_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-game-mode",
+          "markdownDescription": "Enables the game_mode command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the list_clips command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-clips",
+          "markdownDescription": "Enables the list_clips command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_library command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-library",
+          "markdownDescription": "Enables the open_library command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rename_clip command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rename-clip",
+          "markdownDescription": "Enables the rename_clip command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_replay command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-replay",
+          "markdownDescription": "Enables the save_replay command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the start_replay command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-start-replay",
+          "markdownDescription": "Enables the start_replay command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-status",
+          "markdownDescription": "Enables the status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stop_replay command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-stop-replay",
+          "markdownDescription": "Enables the stop_replay command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the trim_clip command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-trim-clip",
+          "markdownDescription": "Enables the trim_clip command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the capture_options command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-capture-options",
+          "markdownDescription": "Denies the capture_options command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the clip_duration command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-clip-duration",
+          "markdownDescription": "Denies the clip_duration command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the clip_media_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-clip-media-url",
+          "markdownDescription": "Denies the clip_media_url command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the game_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-game-mode",
+          "markdownDescription": "Denies the game_mode command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the list_clips command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-clips",
+          "markdownDescription": "Denies the list_clips command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_library command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-library",
+          "markdownDescription": "Denies the open_library command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rename_clip command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rename-clip",
+          "markdownDescription": "Denies the rename_clip command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_replay command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-replay",
+          "markdownDescription": "Denies the save_replay command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_replay command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-start-replay",
+          "markdownDescription": "Denies the start_replay command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-status",
+          "markdownDescription": "Denies the status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_replay command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-stop-replay",
+          "markdownDescription": "Denies the stop_replay command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the trim_clip command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-trim-clip",
+          "markdownDescription": "Denies the trim_clip command without any pre-configured scope."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",

@@ -6,7 +6,7 @@ project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 out_dir="${1:-$project_dir/releases}"
 mkdir -p "$out_dir"
 out_dir="$(cd -- "$out_dir" && pwd)"
-source_archive="$out_dir/afterglow-0.1.2-linux-x86_64.tar.gz"
+source_archive="$out_dir/afterglow-0.1.3-linux-x86_64.tar.gz"
 [[ -f "$source_archive" ]] || { echo 'First run scripts/package-release.sh with the same output directory.' >&2; exit 1; }
 for tool in bsdtar zstd tar sha256sum desktop-file-validate; do command -v "$tool" >/dev/null || { echo "Missing packaging tool: $tool" >&2; exit 1; }; done
 stage="$(mktemp -d)"

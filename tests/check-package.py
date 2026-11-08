@@ -19,6 +19,9 @@ with tempfile.TemporaryDirectory() as folder:
             break
         assert parent.stat().st_mode & 0o005 == 0o005, f'Launcher directory unreadable: {parent}'
     subprocess.run(['desktop-file-validate', str(desktop)], check=True)
+    security=root / 'usr/share/doc/afterglow/SECURITY.md'
+    assert security.stat().st_mode & 0o777 == 0o644
+    assert 'Remaining boundaries' in security.read_text()
     metadata = (root / '.PKGINFO').read_text()
     assert 'depend = desktop-file-utils\n' in metadata
     assert 'Exec=/usr/bin/afterglow\n' in desktop.read_text()

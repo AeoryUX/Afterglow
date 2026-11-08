@@ -1,0 +1,43 @@
+{
+  "reviewed": "2026-11-08",
+  "expires": "2027-02-08",
+  "patched": [
+    {
+      "package": "glib",
+      "version": "0.18.5",
+      "advisories": [
+        "RUSTSEC-2024-0429",
+        "GHSA-wrw7-89jp-8q8g"
+      ],
+      "file": "src-tauri/vendor/glib/src/variant_iter.rs",
+      "sha256": "a0f5ee8acb8faa089bcdfbc9a57372609fce7654026ccef7d9a224d05a654ccc",
+      "reason": "Upstream mutable out-pointer fix backported; optimized iterator regression test."
+    }
+  ],
+  "informational": [
+    {
+      "package": "proc-macro-error",
+      "version": "1.0.4",
+      "advisory": "RUSTSEC-2024-0370",
+      "reason": "Unmaintained transitive crate in the current GUI/build stack; requires upstream migration. This is a maintenance warning, not a reported exploitable vulnerability."
+    },
+    {
+      "package": "zbus_names",
+      "version": "4.3.5",
+      "advisory": "RUSTSEC-2026-0371",
+      "reason": "Unmaintained transitive crate in the current GUI/build stack; requires upstream migration. This is a maintenance warning, not a reported exploitable vulnerability."
+    },
+    {
+      "package": "zvariant",
+      "version": "5.15.1",
+      "advisory": "RUSTSEC-2026-0370",
+      "reason": "Unmaintained transitive crate in the current GUI/build stack; requires upstream migration. This is a maintenance warning, not a reported exploitable vulnerability."
+    },
+    {
+      "package": "zvariant_derive",
+      "version": "5.15.1",
+      "advisory": "RUSTSEC-2026-0372",
+      "reason": "Unmaintained transitive crate in the current GUI/build stack; requires upstream migration. This is a maintenance warning, not a reported exploitable vulnerability."
+    }
+  ]
+}

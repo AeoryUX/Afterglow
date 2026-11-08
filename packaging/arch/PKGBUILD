@@ -1,6 +1,6 @@
 # Local binary package recipe for the signed pacman repository.
 pkgname=afterglow-bin
-pkgver=0.1.2
+pkgver=0.1.3
 pkgrel=1
 pkgdesc='NVIDIA-first instant replay and local gameplay clips for Linux'
 arch=('x86_64')
@@ -10,13 +10,14 @@ provides=('afterglow')
 conflicts=('afterglow')
 options=('!strip' '!debug')
 source=("afterglow-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('9a7a06171c018ba9a547aa6a4e60049d4b3753b3e3c3e96bf8d2728647946ee3')
+sha256sums=('e6556fcaf4a00c7a5163fb8fb1260aa15abde8225e9ba740c902d834a42d3261')
 
 package() {
     local release="$srcdir/afterglow-${pkgver}-linux-x86_64"
     install -Dm755 "$release/afterglow" "$pkgdir/usr/bin/afterglow"
     install -Dm755 "$release/afterglow-save" "$pkgdir/usr/bin/afterglow-save"
     install -Dm644 "$release/icon.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/dev.afterglow.desktop.png"
+    install -Dm644 "$release/SECURITY.md" "$pkgdir/usr/share/doc/afterglow/SECURITY.md"
     install -Dm644 "$release/README.md" "$pkgdir/usr/share/doc/afterglow/README.md"
     install -Dm644 "$release/THIRD_PARTY_NOTICES.txt" "$pkgdir/usr/share/licenses/afterglow-bin/THIRD_PARTY_NOTICES.txt"
     install -Dm644 "$release/COPYING" "$pkgdir/usr/share/licenses/afterglow-bin/COPYING"
