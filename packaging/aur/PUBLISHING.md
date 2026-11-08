@@ -12,12 +12,12 @@ Paru reads .SRCINFO/PKGBUILD, downloads the pinned prebuilt native release, chec
 
 - There is no `afterglow-bin` AUR entry and no connected AUR SSH identity.
 - The user does not yet have an AUR maintainer account, and new AUR registration is temporarily closed. Do not automate retries. Use the signed repository alternative in ../repository/HOSTING.md if installation is needed before registration reopens.
-- The GitHub connection can read existing repositories but rejected creating AeoryUX/afterglow with `Resource not accessible by integration (createRepository)`.
+- GitHub source and signed package hosting are now live. The signed pacman repository is the active installation route while AUR registration remains closed.
 
 ## Required account setup
 
 1. Create an AUR account at https://aur.archlinux.org/register/ and verify the email. Add the public part of an SSH key to the account. Keep the private key private; do not paste it into chat.
-2. Create an empty public GitHub repository `AeoryUX/afterglow` at https://github.com/new and grant the connected GitHub app access if needed. The GPL source and release files have been prepared locally for upload.
+2. The public GitHub repository is already available at https://github.com/AeoryUX/Afterglow. The version-pinned native archive URL below matches the AUR recipe.
 
 ## Host the release first
 
@@ -26,7 +26,7 @@ Publish the prepared source under tag `v0.1.1` in AeoryUX/afterglow. Attach the 
 The public source URL expected by this recipe is:
 
 ```
-https://github.com/AeoryUX/afterglow/releases/download/v0.1.1/afterglow-0.1.1-linux-x86_64.tar.gz
+https://raw.githubusercontent.com/AeoryUX/Afterglow/v0.1.1-packages/releases/v0.1.1/afterglow-0.1.1-linux-x86_64.tar.gz
 ```
 
 ## Submit the package
