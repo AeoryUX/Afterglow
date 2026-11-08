@@ -1,0 +1,18 @@
+{
+  "targetBytes": 1000000000,
+  "uiRecording": {
+    "bytes": 419015680,
+    "processes": 4,
+    "recorderBytes": 96671744
+  },
+  "gameModeRecording": {
+    "bytes": 256099328,
+    "processes": 3,
+    "recorderBytes": 96674816
+  },
+  "savedWhileInGameMode": true,
+  "liveCaelestiaSync": true,
+  "testBoundary": "Simulated recorder with a real resident 90 MB buffer; no NVIDIA GPU or Hyprland capture in this environment.",
+  "artifact": "Afterglow-0.1.1-x86_64.AppImage",
+  "accounting": "Proportional resident memory summed across the app and descendants. Excludes GPU VRAM, all filesystem cache, and external desktop/kernel service allocations."
+}
