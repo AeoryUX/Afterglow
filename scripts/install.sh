@@ -17,9 +17,12 @@ Comment=Keep your gameplay highlights on Linux
 Exec="$prefix/bin/afterglow"
 Icon=$prefix/share/icons/hicolor/128x128/apps/dev.afterglow.desktop.png
 Terminal=false
-Categories=AudioVideo;Recorder;Game;
+Categories=AudioVideo;Recorder;
+GenericName=Gameplay Recorder
+Keywords=Afterglow;Clips;Gameplay;Replay;Recording;Video;
 StartupWMClass=dev.afterglow.desktop
 DESKTOP
+chmod 644 "$prefix/share/applications/dev.afterglow.desktop.desktop"
 if command -v update-desktop-database >/dev/null; then update-desktop-database "$prefix/share/applications" || true; fi
 printf 'Installed Afterglow. Open it from your launcher or run: %s/bin/afterglow\n' "$prefix"
 printf 'For replay capture, install GPU Screen Recorder and verify nvidia-smi in your desktop session.\n'

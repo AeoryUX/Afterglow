@@ -6,9 +6,9 @@ project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 out_dir="${1:-$project_dir/releases}"
 mkdir -p "$out_dir"
 out_dir="$(cd -- "$out_dir" && pwd)"
-source_archive="$out_dir/afterglow-0.1.1-linux-x86_64.tar.gz"
+source_archive="$out_dir/afterglow-0.1.2-linux-x86_64.tar.gz"
 [[ -f "$source_archive" ]] || { echo 'First run scripts/package-release.sh with the same output directory.' >&2; exit 1; }
-for tool in bsdtar zstd tar sha256sum; do command -v "$tool" >/dev/null || { echo "Missing packaging tool: $tool" >&2; exit 1; }; done
+for tool in bsdtar zstd tar sha256sum desktop-file-validate; do command -v "$tool" >/dev/null || { echo "Missing packaging tool: $tool" >&2; exit 1; }; done
 stage="$(mktemp -d)"
 trap 'rm -rf -- "$stage"' EXIT
 export srcdir="$stage/source" pkgdir="$stage/package"
@@ -20,6 +20,9 @@ source "$recipe"
 actual_sha="$(sha256sum "$source_archive" | cut -d' ' -f1)"
 [[ "$actual_sha" == "${sha256sums[0]}" ]] || { echo 'Release checksum differs from PKGBUILD. Regenerate the recipe checksum first.' >&2; exit 1; }
 package
+# Fail before creating a repository artifact if a launcher cannot be read.
+[[ $(stat -c %a "$pkgdir/usr/share/applications/dev.afterglow.desktop.desktop") == 644 ]] || { echo 'Desktop entry must be mode 0644.' >&2; exit 1; }
+[[ -x "$pkgdir/usr/bin/afterglow" ]] || { echo 'App executable is not executable.' >&2; exit 1; }
 installed_size="$(du -sb "$pkgdir" | cut -f1)"
 {
     printf 'pkgname = %s\npkgbase = %s\npkgver = %s-%s\npkgdesc = %s\n' "$pkgname" "$pkgname" "$pkgver" "$pkgrel" "$pkgdesc"

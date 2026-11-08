@@ -3,9 +3,9 @@ use std::{
     collections::BTreeMap,
     fs,
     io::Read,
+    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     sync::Mutex,
-    time::SystemTime,
 };
 
 #[derive(Clone, Default, Serialize)]
@@ -18,7 +18,7 @@ pub struct Theme {
     pub error: Option<String>,
 }
 #[derive(Default)]
-pub struct Cache(pub Mutex<Option<(PathBuf, Option<SystemTime>, Theme)>>);
+pub struct Cache(Mutex<Option<(PathBuf, Option<(u64, u64, i64, i64)>, Theme)>>);
 fn colour(value: &str) -> Option<String> {
     let hex = value.strip_prefix('#').unwrap_or(value);
     (hex.len() == 6 && hex.bytes().all(|c| c.is_ascii_hexdigit())).then(|| format!("#{hex}"))
@@ -71,12 +71,14 @@ fn parse(data: &str) -> Result<Theme, String> {
     })
 }
 pub fn read(path: &Path, cache: &Cache) -> Theme {
-    let modified = fs::metadata(path).ok().and_then(|m| m.modified().ok());
+    let modified = fs::metadata(path)
+        .ok()
+        .map(|m| (m.ino(), m.len(), m.ctime(), m.ctime_nsec()));
     let Ok(mut stored) = cache.0.lock() else {
         return Theme::default();
     };
     if let Some((old_path, old_time, theme)) = stored.as_ref() {
-        if old_path == path && *old_time == modified {
+        if old_path == path && modified.is_some() && *old_time == modified {
             return theme.clone();
         }
     }
@@ -91,12 +93,24 @@ pub fn read(path: &Path, cache: &Cache) -> Theme {
         }
         parse(&data)
     })();
-    let theme = result.unwrap_or_else(|e| Theme {
-        error: Some(e),
-        ..Theme::default()
-    });
-    *stored = Some((path.to_path_buf(), modified, theme.clone()));
-    theme
+    match result {
+        Ok(theme) => {
+            *stored = Some((path.to_path_buf(), modified, theme.clone()));
+            theme
+        }
+        Err(error) => {
+            // Scheme writers may truncate or replace the file before finishing.
+            // Preserve the last usable palette, and retry even if metadata stays unchanged.
+            let mut theme = stored
+                .as_ref()
+                .filter(|(old_path, _, _)| old_path == path)
+                .map(|(_, _, theme)| theme.clone())
+                .unwrap_or_default();
+            theme.error = Some(error);
+            *stored = Some((path.to_path_buf(), None, theme.clone()));
+            theme
+        }
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -112,5 +126,25 @@ mod tests {
         assert!(colour("red; background:url(x)").is_none());
         assert!(colour("#123456").is_some());
         assert!(parse(r#"{"colours":{"primary":"bad"}}"#).is_err());
+    }
+    #[test]
+    fn keeps_palette_during_partial_write_and_recovers() {
+        let path =
+            std::env::temp_dir().join(format!("afterglow-theme-{}.json", std::process::id()));
+        let cache = Cache::default();
+        let valid = r#"{"name":"Ocean","colours":{"primary":"00639b","surface":"f9f9ff","onSurface":"191c20"}}"#;
+        fs::write(&path, valid).unwrap();
+        assert!(read(&path, &cache).available);
+        fs::write(&path, r#"{"name":"#).unwrap();
+        let partial = read(&path, &cache);
+        assert!(partial.available && partial.error.is_some());
+        assert_eq!(partial.colours["primary"], "#00639b");
+        fs::remove_file(&path).unwrap();
+        assert!(read(&path, &cache).available);
+        fs::write(&path, valid.replace("00639b", "123456")).unwrap();
+        let recovered = read(&path, &cache);
+        assert_eq!(recovered.colours["primary"], "#123456");
+        assert!(recovered.error.is_none());
+        fs::remove_file(path).unwrap();
     }
 }

@@ -1,43 +1,19 @@
 # Distribution packaging validation
 
-Afterglow 0.1.1 alpha now has an AppImage and an Arch binary package.
+## Version 0.1.2 (2026-11-08)
 
-- AppImage: `Afterglow-0.1.1-x86_64.AppImage`, approximately 185 MiB. GTK3, WebKitGTK, playback libraries, and dependency notices are included. GPU Screen Recorder, FFmpeg, the NVIDIA driver, and the system's glibc remain host dependencies.
-- Arch: `afterglow-bin-0.1.1-1-x86_64.pkg.tar.zst`, approximately 3.6 MiB. Installs the executable, shortcut helper, desktop entry, icon, README, and third-party notices. Host dependencies are recorded in `.PKGINFO`.
-- Both target Linux x86_64 with glibc >= 2.39. These are local alpha packages, not signed public releases or a published AUR entry.
+The signed Arch/CachyOS package is `afterglow-bin-0.1.2-1-x86_64.pkg.tar.zst`. The native release archive contains the executable, shortcut helper, user installer, canonical desktop entry, icon, documentation, GPL license, and dependency notices. It targets Linux x86_64 with glibc >= 2.39.
 
-## Verified
+The previous binary package installed a root-owned desktop entry with mode 0600. Quickshell's desktop-entry reader skips unreadable files, so Caelestia could not list it. The updated recipe installs the canonical entry explicitly with mode 0644, validates its contents, and declares desktop-file-utils for desktop database updates. The user installer also sets mode 0644. The filename remains dev.afterglow.desktop.desktop to preserve the existing dev.afterglow.desktop application identity.
 
-1. All fifteen Rust backend/media tests pass, including the AppImage system-command environment guard.
-2. The AppImage payload (AppDir) launches with its bundled GTK/WebKit stack, handles simulated capture/save/stop, runs host FFmpeg for trim/duration, and plays MP4 video to readyState 4.
-3. The final AppImage itself passes the same native WebKit WebDriver flow using the runtime's extract-and-run mode. No FUSE device is available in the cloud environment, so FUSE mounting was not tested.
-4. Both the payload and final AppImage's `--save-replay` command signal a user-owned GPU Screen Recorder executable fixture and reject a negative PID. This works without opening a desktop window.
-5. Pacman 7/libalpm 15 accepts the Arch package metadata and lists its installed paths. The package has root ownership metadata, `.PKGINFO`, and a gzip-compressed `.MTREE`. Full installation on CachyOS was not performed in this cloud environment.
-6. Native release, Arch package, AppImage, and source ZIP have SHA-256 checksums.
+Packaging is tested with umask 077, matching the restrictive environment that exposed the bug. `python3 tests/check-package.py PACKAGE` extracts the actual archive and checks desktop-file validation, launcher mode, traversable directory permissions, executable/icon modes, expected paths, and the desktop cache dependency. Pacman/libalpm reads the resulting package metadata. Package and repository signatures are verified with a separate public-key-only client.
 
-The AppImage uses the official Tauri/linuxdeploy toolchain with GTK and GStreamer bundling. In this rootless build environment, a local configuration supplies the installed WebKit subprocess files and libav playback plugin from a sysroot. Those files are placed under standard paths inside the image. Unlike the earlier bare-executable cloud QA, this final AppImage test uses its own bundled WebKit helpers and libraries.
+The source and new native archive are published with this version in the packages branch. An immutable v0.1.2-packages tag pins the native download used by the future AUR recipe. This is a signed pacman repository; an AUR entry has not been submitted. Use the installer in README once, then `paru -Syu afterglow-bin` or `yay -Syu afterglow-bin` for this update.
 
-AppRun modifies several library/runtime environment variables. Afterglow clears those injected paths for external recording/driver/editing tools while preserving desktop-session variables and non-bundled search paths. This prevents its GUI bundle from becoming the driver or codec stack for GPU Screen Recorder or FFmpeg.
+## Native test boundary
 
-The recorder and GPU detection in cloud UI tests are fixtures. Actual NVIDIA recording, Wayland/KMS capture permissions, game performance, microphone/system-audio synchronization, and the real Hyprland binding still require the hardware acceptance checks in README.md.
+The new executable was tested in the existing bundled GTK/WebKit test payload under a virtual X display. It exercised real Rust IPC, playback, FFmpeg trimming, theme synchronization, and background lifecycle with a test-only recorder. The payload's private runtime paths were relocated for the build environment. Test executables and private signing material are excluded from downloads.
 
-## Local install
+The earlier 0.1.1 AppImage passed extract-and-run testing. A new 0.1.2 AppImage was not built for this package fix. The current update is distributed through the signed Arch repository and native archive.
 
-```bash
-paru -S --needed gpu-screen-recorder ffmpeg
-chmod +x Afterglow-0.1.1-x86_64.AppImage
-./Afterglow-0.1.1-x86_64.AppImage
-```
-
-Alternatively:
-
-```bash
-paru -S --needed gpu-screen-recorder
-paru -U ./afterglow-bin-0.1.1-1-x86_64.pkg.tar.zst
-```
-
-`paru -S afterglow-bin` is unavailable until a public release source and AUR entry are published. The provided PKGBUILD uses the matching native release archive locally and verifies its checksum.
-
-Version 0.1.1 adds a tray, low-memory game mode, measured RAM display, a bounded replay bitrate/duration budget, and read-only Caelestia appearance synchronization. The native package now declares libayatana-appindicator; the AppImage includes its tray libraries. Memory results use a recorder fixture and do not establish a real GPU capture ceiling.
-
-The final 0.1.1 AppImage extract-and-run test measured 419,015,680 bytes with the library and fixture recorder active, and 256,099,328 bytes in game mode. Caelestia live colour/light-mode changes, saving with the library closed, reopening by relaunch, playback, and the --save-replay ownership/PID guards passed. The resident recorder fixture held 90,000,000 bytes, and no physical GPU capture was exercised. See the accompanying afterglow-0.1.1-memory-test.json for the raw figures and accounting boundary.
+Real NVIDIA/Wayland capture, KMS permissions, game performance, physical audio output, and the actual Hyprland shortcut remain hardware acceptance work. The Caelestia/Quickshell launcher source was reviewed, but a live Caelestia desktop was not available here.

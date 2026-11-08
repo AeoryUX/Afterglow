@@ -1,6 +1,6 @@
 {
   "name": "afterglow",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "package:release": "bash scripts/package-release.sh",
     "test:backend": "cargo test --manifest-path src-tauri/Cargo.toml -- --include-ignored",
     "package:appimage": "tauri build --bundles appimage",
-    "package:arch": "bash scripts/package-arch.sh"
+    "package:arch": "bash scripts/package-arch.sh",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

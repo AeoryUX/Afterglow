@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Afterglow
+GenericName=Gameplay Recorder
+Comment=Keep your gameplay highlights on Linux
+Exec=/usr/bin/afterglow
+TryExec=/usr/bin/afterglow
+Icon=dev.afterglow.desktop
+Terminal=false
+Categories=AudioVideo;Recorder;
+Keywords=Afterglow;Clips;Gameplay;Replay;Recording;Video;
+StartupWMClass=dev.afterglow.desktop

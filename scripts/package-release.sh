@@ -8,12 +8,13 @@ mkdir -p "$out_dir"
 out_dir="$(cd -- "$out_dir" && pwd)"
 stage="$(mktemp -d)"
 trap 'rm -rf -- "$stage"' EXIT
-name=afterglow-0.1.1-linux-x86_64
+name=afterglow-0.1.2-linux-x86_64
 mkdir -p "$stage/$name"
 install -m755 "$release_binary" "$stage/$name/afterglow"
 install -m755 "$project_dir/scripts/afterglow-save" "$stage/$name/afterglow-save"
 install -m755 "$project_dir/scripts/install.sh" "$stage/$name/install.sh"
 install -m644 "$project_dir/src-tauri/icons/128x128.png" "$stage/$name/icon.png"
+install -m644 "$project_dir/packaging/afterglow.desktop" "$stage/$name/afterglow.desktop"
 install -m644 "$project_dir/README.md" "$stage/$name/README.md"
 install -m644 "$project_dir/THIRD_PARTY_NOTICES.txt" "$stage/$name/THIRD_PARTY_NOTICES.txt"
 install -m644 "$project_dir/VALIDATION.md" "$stage/$name/VALIDATION.md"

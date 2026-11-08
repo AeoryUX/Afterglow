@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod clips;
+mod launcher;
 mod media;
 mod memory;
 mod system;
@@ -21,7 +22,7 @@ use tauri::{Emitter, Manager, State};
 #[derive(Default)]
 struct Recorder(
     Mutex<Option<Child>>,
-    std::sync::OnceLock<(String, bool, bool)>,
+    Mutex<Option<(std::time::Instant, (String, bool, bool))>>,
     AtomicBool,
 );
 #[derive(Default)]
@@ -47,6 +48,7 @@ struct MemoryState(Mutex<memory::Sample>);
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Status {
+    tray_initialized: bool,
     stopped_intentionally: bool,
     memory_target_bytes: u64,
     memory: memory::Sample,
@@ -110,9 +112,14 @@ fn is_running(slot: &mut Option<Child>) -> Result<bool, String> {
     Ok(false)
 }
 #[tauri::command]
-async fn status(app: tauri::AppHandle) -> Result<Status, String> {
+async fn status(app: tauri::AppHandle, force: Option<bool>) -> Result<Status, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        status_inner(&app, app.state::<Recorder>(), app.state::<ActiveSettings>())
+        status_inner(
+            &app,
+            app.state::<Recorder>(),
+            app.state::<ActiveSettings>(),
+            force.unwrap_or(false),
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -121,6 +128,7 @@ fn status_inner(
     app: &tauri::AppHandle,
     state: State<Recorder>,
     active: State<ActiveSettings>,
+    force: bool,
 ) -> Result<Status, String> {
     let running = {
         let mut slot = state.0.lock().map_err(|e| e.to_string())?;
@@ -145,19 +153,29 @@ fn status_inner(
         .rev()
         .collect::<Vec<_>>()
         .join("\n");
-    let detected = state.1.get_or_init(|| {
-        (
-            gpu(),
-            available(),
-            system::command("ffmpeg")
-                .arg("-version")
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .map(|s| s.success())
-                .unwrap_or(false),
-        )
-    });
+    let detected = {
+        let mut cached = state.1.lock().map_err(|e| e.to_string())?;
+        if force
+            || cached
+                .as_ref()
+                .map(|(time, _)| time.elapsed() > std::time::Duration::from_secs(30))
+                .unwrap_or(true)
+        {
+            let info = (
+                gpu(),
+                available(),
+                system::command("ffmpeg")
+                    .arg("-version")
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false),
+            );
+            *cached = Some((std::time::Instant::now(), info));
+        }
+        cached.as_ref().unwrap().1.clone()
+    };
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
     let state_dir = std::env::var_os("XDG_STATE_HOME")
         .filter(|p| !p.is_empty())
@@ -168,6 +186,7 @@ fn status_inner(
         &app.state::<theme::Cache>(),
     );
     Ok(Status {
+        tray_initialized: app.try_state::<TrayControls>().is_some(),
         stopped_intentionally: state.2.load(Ordering::SeqCst),
         memory_target_bytes: memory::RAM_TARGET,
         memory: app
@@ -345,10 +364,12 @@ async fn stop_replay(app: tauri::AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<Recorder>();
         signal(&state, libc::SIGINT)?;
-        let mut slot = state.0.lock().map_err(|e| e.to_string())?;
         for _ in 0..50 {
-            if !is_running(&mut slot)? {
-                return Ok(());
+            {
+                let mut slot = state.0.lock().map_err(|e| e.to_string())?;
+                if !is_running(&mut slot)? {
+                    return Ok(());
+                }
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
@@ -394,15 +415,25 @@ async fn trim_clip(
         .map_err(|e| e.to_string())?
 }
 #[tauri::command]
-fn open_library(app: tauri::AppHandle) -> Result<(), String> {
-    system::command("xdg-open")
-        .arg(output_dir(&app)?)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
+async fn open_library(app: tauri::AppHandle) -> Result<(), String> {
+    let path = output_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = system::command("xdg-open")
+            .arg(path)
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|e| e.to_string())?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "Could not open the clip folder: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ))
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 async fn capture_options() -> Result<Vec<String>, String> {
@@ -593,6 +624,18 @@ fn start_memory_monitor(app: tauri::AppHandle) {
     });
 }
 fn main() {
+    if std::env::args().any(|arg| arg == "--version" || arg == "-V") {
+        println!("Afterglow {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+    if std::env::args().any(|arg| arg == "--doctor") {
+        launcher::doctor();
+        return;
+    }
+    if std::env::args().any(|arg| arg == "--help" || arg == "-h") {
+        println!("Afterglow: launch the app, or use --show, --save-replay, --doctor, --version");
+        return;
+    }
     if std::env::args().skip(1).any(|arg| arg == "--save-replay") {
         if let Err(error) = save_from_cli() {
             eprintln!("{error}");
@@ -604,7 +647,7 @@ fn main() {
         .setup(|app| {
             let root = output_dir(app.handle()).map_err(std::io::Error::other)?;
             app.manage(media::MediaServer::start(root).map_err(std::io::Error::other)?);
-            setup_tray(app.handle())?;
+            if let Err(error)=setup_tray(app.handle()) {eprintln!("Tray initialization failed: {error}. The app remains usable; relaunch to restore the library from game mode.");}
             if let Some(window) = app.get_webview_window("main") {
                 reduce_web_cache(&window);
             }

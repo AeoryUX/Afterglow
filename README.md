@@ -1,6 +1,6 @@
-# Afterglow 0.1.1 alpha
+# Afterglow 0.1.2 alpha
 
-A gameplay clipping app for Linux, targeting CachyOS + Hyprland and NVIDIA first. Afterglow provides replay controls and a local clip library, using GPU Screen Recorder for capture and FFmpeg for edits. AMD and Intel support follow NVIDIA hardware validation.
+A gameplay clipping app for Linux, targeting CachyOS + Hyprland and NVIDIA first. Afterglow provides replay controls and a local clip library, using GPU Screen Recorder for capture and FFmpeg for edits. AMD and Intel support follow NVIDIA hardware validation. The launcher fix preserves the existing application ID, clips, and settings.
 
 ## Install on CachyOS / Arch Linux
 
@@ -42,13 +42,15 @@ Game mode closes the clip browser while capture and hotkeys continue. Use the tr
 
 ## Validation and limits
 
-Fifteen backend tests and native UI/playback/trim/theme/background tests passed with a simulated recorder. One packaged test measured approximately 419 MB with the library open and 256 MB in game mode while the fixture held a resident 90 MB buffer. These figures are not a GTX 1660 Super recording benchmark or a universal RAM ceiling. Real NVIDIA/Wayland capture, permissions, audio sync, and game performance still require hardware testing.
+Sixteen backend tests and native UI/playback/trim/theme/background tests passed with a simulated recorder. One packaged test measured approximately 404 MB with the library open and 246 MB in game mode while the fixture held a resident 90 MB buffer. These figures are not a GTX 1660 Super recording benchmark or a universal RAM ceiling. Real NVIDIA/Wayland capture, permissions, audio sync, and game performance still require hardware testing.
 
 The RAM target is below 1 GB, with a bounded encoded replay buffer and automatic game-mode switching above 850 MB of measured app/process-tree memory. GPU VRAM, all filesystem cache, and external shared desktop/kernel allocations are outside that readout. See VALIDATION.md and PACKAGING-VALIDATION.md for the test boundaries.
 
 Clips and preferences stay local. The selected display includes other windows and notifications. Nothing is uploaded by the app; playback uses a token-protected loopback stream.
 
 ## Troubleshoot
+
+Version 0.1.2 fixes a package bug that made the system desktop entry readable only by root. Existing installations can update with `paru -Syu afterglow-bin` or `yay -Syu afterglow-bin`. Close and reopen the launcher after updating. If it is still missing, run `afterglow --doctor` to inspect launcher paths, permissions, and a possible user override. Do not run the app with sudo.
 
 Read Capture setup → Capture log after a failed start. Check `nvidia-smi`, `gpu-screen-recorder --info`, and `gpu-screen-recorder --list-capture-options`. Follow the recorder package's KMS permission instructions and run Afterglow as your normal user. A clip must finish writing before FFprobe can read it for trimming.
 
@@ -64,6 +66,6 @@ Build a native executable with `npm run tauri build -- --no-bundle`. Run backend
 
 ## Source, packages, and license
 
-Application source is in this branch. Signed package files are in the [packages branch](https://github.com/AeoryUX/Afterglow/tree/packages); versioned native archives and corresponding source are under its `releases/` directory. See the [0.1.1 release](https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.1) and [repository information](https://github.com/AeoryUX/Afterglow/releases/tag/arch-repository).
+Application source is in this branch. Signed package files are in the [packages branch](https://github.com/AeoryUX/Afterglow/tree/packages); versioned native archives and corresponding source are under its `releases/` directory. See the [0.1.2 release](https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.2) and [repository information](https://github.com/AeoryUX/Afterglow/releases/tag/arch-repository).
 
 Afterglow's original code is GPL-3.0-only. See COPYING and LICENSE.md. Dependencies keep their respective licenses; notices are included in THIRD_PARTY_NOTICES.txt and package distributions.
