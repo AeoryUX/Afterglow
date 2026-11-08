@@ -1,0 +1,16 @@
+{
+  "targetBytes": 1000000000,
+  "uiRecording": {
+    "bytes": 404435968,
+    "processes": 4,
+    "recorderBytes": 96663552
+  },
+  "gameModeRecording": {
+    "bytes": 245656576,
+    "processes": 3,
+    "recorderBytes": 96667648
+  },
+  "savedWhileInGameMode": true,
+  "liveCaelestiaSync": true,
+  "testBoundary": "Simulated recorder with a real resident 90 MB buffer; no NVIDIA GPU or Hyprland capture in this environment."
+}
