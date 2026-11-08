@@ -11,7 +11,7 @@ Paru reads .SRCINFO/PKGBUILD, downloads the pinned prebuilt native release, chec
 ## Current blockers
 
 - There is no `afterglow-bin` AUR entry and no connected AUR SSH identity.
-- The user does not yet have an AUR maintainer account.
+- The user does not yet have an AUR maintainer account, and new AUR registration is temporarily closed. Do not automate retries. Use the signed repository alternative in ../repository/HOSTING.md if installation is needed before registration reopens.
 - The GitHub connection can read existing repositories but rejected creating AeoryUX/afterglow with `Resource not accessible by integration (createRepository)`.
 
 ## Required account setup

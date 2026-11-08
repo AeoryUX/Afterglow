@@ -217,3 +217,7 @@ Only after these pass should NVIDIA support be considered validated. Then add AM
 ## License and AUR publishing
 
 Afterglow is GPL-3.0-only; see COPYING and LICENSE.md. The `packaging/aur` directory contains the public-release PKGBUILD and publishing guide. Its dependencies include GPU Screen Recorder, FFmpeg, GTK/WebKit, playback/tray libraries, and nvidia-utils, so a published `paru -S afterglow-bin` entry can install the app dependencies in one operation. The correct NVIDIA kernel driver remains part of the existing CachyOS setup. The entry is not live until the release is hosted and the AUR repository is pushed.
+
+## AUR registration temporarily closed: signed repository alternative
+
+New AUR account registration is temporarily closed. A signed pacman repository is prepared as an alternative, so after one-time repository setup users can still run `paru -S afterglow-bin`. See packaging/repository/HOSTING.md. The repository is not hosted yet; it needs the AeoryUX/afterglow GitHub repository and release assets first. No AUR account is needed for this alternative.
