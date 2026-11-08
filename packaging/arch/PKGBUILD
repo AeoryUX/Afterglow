@@ -1,0 +1,36 @@
+# Local binary package recipe. No public AUR entry or remote release URL yet.
+pkgname=afterglow-bin
+pkgver=0.1.1
+pkgrel=2
+pkgdesc='NVIDIA-first instant replay and local gameplay clips for Linux'
+arch=('x86_64')
+license=('GPL-3.0-only')
+depends=('glibc>=2.39' 'gcc-libs' 'gtk3' 'webkit2gtk-4.1' 'libayatana-appindicator' 'ffmpeg' 'gst-libav' 'gst-plugins-good' 'xdg-utils' 'gpu-screen-recorder' 'nvidia-utils')
+provides=('afterglow')
+conflicts=('afterglow')
+options=('!strip' '!debug')
+source=("afterglow-${pkgver}-linux-x86_64.tar.gz")
+sha256sums=('3f23be66fe20a8d5e2ca347f6bffc7d505c26cd4d88c1fdb463071178e911403')
+
+package() {
+    local release="$srcdir/afterglow-${pkgver}-linux-x86_64"
+    install -Dm755 "$release/afterglow" "$pkgdir/usr/bin/afterglow"
+    install -Dm755 "$release/afterglow-save" "$pkgdir/usr/bin/afterglow-save"
+    install -Dm644 "$release/icon.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/dev.afterglow.desktop.png"
+    install -Dm644 "$release/README.md" "$pkgdir/usr/share/doc/afterglow/README.md"
+    install -Dm644 "$release/THIRD_PARTY_NOTICES.txt" "$pkgdir/usr/share/licenses/afterglow-bin/THIRD_PARTY_NOTICES.txt"
+    install -Dm644 "$release/COPYING" "$pkgdir/usr/share/licenses/afterglow-bin/COPYING"
+    install -Dm644 "$release/LICENSE.md" "$pkgdir/usr/share/licenses/afterglow-bin/LICENSE.md"
+    install -dm755 "$pkgdir/usr/share/applications"
+    cat > "$pkgdir/usr/share/applications/dev.afterglow.desktop.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Afterglow
+Comment=Keep your gameplay highlights on Linux
+Exec=afterglow
+Icon=dev.afterglow.desktop
+Terminal=false
+Categories=AudioVideo;Recorder;Game;
+StartupWMClass=dev.afterglow.desktop
+DESKTOP
+}
