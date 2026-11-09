@@ -24,3 +24,5 @@ After initial setup, both `yay -S afterglow-bin` and `paru -S afterglow-bin` wor
 Version 0.1.2 fixes launcher file permissions and Caelestia theme/update handling. Existing users can update with `paru -Syu afterglow-bin` or `yay -Syu afterglow-bin`. Close and reopen the launcher after updating.
 
 Version 0.1.3 adds private files, restricted video processing, tighter native permissions, safer save signaling and a backported GLib fix. See https://github.com/AeoryUX/Afterglow/blob/main/SECURITY.md for protections and remaining boundaries.
+
+Version 0.1.4 adds Settings tabs and an easy Hyprland keybind editor, total clip-library storage budgets, session/resolution/cursor controls, and a white tray icon. Closing keeps replay alive by default. Use Quit Afterglow in the tray, then reopen after upgrading. Details: https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.4
