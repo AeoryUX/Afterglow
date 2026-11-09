@@ -1,18 +1,24 @@
-# Afterglow 0.1.4 alpha validation
+# Afterglow 0.1.5 alpha validation
 
 Validated on 2026-11-09 in a Linux x86_64 cloud environment. The target desktop is CachyOS + Hyprland + Caelestia + NVIDIA GTX 1660 Super.
 
 ## Passed
 
 - Vite production build and optimized, stripped Rust/Tauri release build.
-- Thirty optimized Rust backend/media tests, including real FFmpeg trimming, original preservation, filename/path boundaries, HTTP byte ranges, capture settings, process-tree memory, and retaining/recovering a valid palette while a Caelestia scheme is partially written.
+- Thirty-one optimized Rust backend/media tests, including real 1080p60 FFmpeg fast and precise trimming, original preservation, filename/path boundaries, HTTP byte ranges, capture settings, process-tree memory, and retaining/recovering a valid palette while a Caelestia scheme is partially written.
 - Three JavaScript preference/key-recorder tests: corrupt/legacy settings recover safe defaults and excessive encoded replay budgets are bounded.
 - Browser preview: capture guard, navigation, saved preferences, search, 900px/600px layouts, and no JavaScript errors.
 - Browser with a simulated native bridge: start/save/stop, rename, trim, open-folder, delayed monitor detection, forced diagnostic refresh, and live capture controls on the setup page without discarding unsaved preferences.
 - Native WebKitGTK test under Xvfb: actual compiled interface/Rust IPC, recorder start/save/stop, real MP4 duration/rename/trim/playback (readyState 4), live dark/light Caelestia schemes, partial scheme recovery, and setup controls following external replay state.
-- Game mode tears down the web process, preserves recording and saving, and relaunch restores the library. The recorder fixture held a resident 90 MB buffer. Measured tree PSS: 410,335,232 bytes with the library and 247,202,816 bytes in game mode. These are fixture results, not a hardware benchmark or a universal ceiling.
+- Game mode tears down the web process, preserves recording and saving, and relaunch restores the library. The recorder fixture held a resident 90 MB buffer. Measured tree PSS: 437,886,976 bytes with the library and 247,390,208 bytes in game mode. These are fixture results, not a hardware benchmark or a universal ceiling.
 - Headless --version, --help, --doctor, and --save-replay; the latter signals an owned recorder and rejects negative PIDs.
 - Package regression checks under umask 077, desktop-file validation, pacman metadata, SHA-256 integrity, and package/repository signatures. See PACKAGING-VALIDATION.md.
+
+## Startup and export regression checks
+
+Fresh native startup begins replay without clicking Start. A legacy 0.1.4 preferences file with automatic startup disabled is migrated once; an explicit later opt-out persists. An injected early recorder failure remains visible in the compiled interface and --doctor logs; retry succeeds after removing the fixture error. Capture now requests AAC audio for MP4 compatibility and disables repetitive FPS logging; flags were checked against GPU Screen Recorder 6.1.7's packaged manual.
+
+Native DOM tests click Export trimmed copy while replay runs, confirm a new fast MP4, and keep replay active. A deliberately corrupted scratch source fails without closing the editor or discarding its range. The browser bridge tests the same failure-and-retry flow. The backend suite checks real 1080p60 fast/precise exports, source preservation, quota cleanup, and killing a memory-heavy processing child without terminating the app. Preview is unloaded before exports. Memory pressure no longer destroys the window automatically; explicit Game mode refuses while the editor is open.
 
 ## Settings and tray regression checks
 

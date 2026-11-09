@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod activity;
 mod clips;
 mod control;
 mod hotkeys;
@@ -96,6 +97,8 @@ struct Status {
     preferences: preferences::Preferences,
     shortcut_status: String,
     background: bool,
+    starting: bool,
+    capture_error: Option<String>,
 }
 fn output_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let p = app
@@ -178,30 +181,17 @@ fn status_inner(
     active: State<ActiveSettings>,
     force: bool,
 ) -> Result<Status, String> {
-    let running = {
+    let starting = app
+        .state::<activity::Activity>()
+        .starting
+        .load(Ordering::SeqCst);
+    let running = if starting {
+        false
+    } else {
         let mut slot = state.0.lock().map_err(|e| e.to_string())?;
         is_running(&mut slot)?
     };
-    let log = (|| -> std::io::Result<String> {
-        use std::io::{Read, Seek, SeekFrom};
-        let path = log_path(app).map_err(std::io::Error::other)?;
-        let mut file = private_fs::Directory::open(path.parent().unwrap())?.read("capture.log")?;
-        let size = file.metadata()?.len();
-        file.seek(SeekFrom::Start(size.saturating_sub(16384)))?;
-        let mut bytes = Vec::new();
-        file.take(16384).read_to_end(&mut bytes)?;
-        Ok(String::from_utf8_lossy(&bytes).into_owned())
-    })()
-    .unwrap_or_default();
-    let log = log
-        .lines()
-        .rev()
-        .take(12)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect::<Vec<_>>()
-        .join("\n");
+    let log = activity::log_tail(app);
     let detected = {
         let mut cached = state.1.lock().map_err(|e| e.to_string())?;
         if force
@@ -249,6 +239,13 @@ fn status_inner(
         .unwrap_or_default();
     let storage = storage::snapshot(&output_dir(app)?, preferences.storage_limit_mb, &settings)?;
     Ok(Status {
+        starting,
+        capture_error: app
+            .state::<activity::Activity>()
+            .capture_error
+            .lock()
+            .map_err(|e| e.to_string())?
+            .clone(),
         background: app.state::<GameMode>().0.load(Ordering::SeqCst),
         session: detected_session(),
         storage,
@@ -311,6 +308,10 @@ fn capture_args(s: &Settings, output: &str) -> Result<Vec<String>, String> {
         "mp4".into(),
         "-k".into(),
         "h264".into(),
+        "-ac".into(),
+        "aac".into(),
+        "-v".into(),
+        "no".into(),
         "-bm".into(),
         "cbr".into(),
         "-q".into(),
@@ -380,18 +381,37 @@ fn start_replay_inner(
 ) -> Result<(), String> {
     // PR_SET_PDEATHSIG follows the spawning Linux thread. Keep that thread alive
     // across closed-window sessions instead of using a retiring async-pool worker.
-    let sender = app
-        .state::<CaptureWorker>()
-        .0
-        .lock()
-        .map_err(|e| e.to_string())?
-        .clone()
-        .ok_or("Capture service is not ready")?;
-    let (reply, result) = std::sync::mpsc::channel();
-    sender
-        .try_send((settings, reply))
-        .map_err(|_| "Capture service is busy; try again in a moment")?;
-    result.recv().map_err(|_| "Capture service stopped")?
+    let activity = app.state::<activity::Activity>();
+    if activity.starting.swap(true, Ordering::SeqCst) {
+        return Err("Replay is already starting".into());
+    }
+    if let Ok(mut error) = activity.capture_error.lock() {
+        *error = None;
+    }
+    activity::event(app, "Starting replay");
+    let result = (|| {
+        let sender = app
+            .state::<CaptureWorker>()
+            .0
+            .lock()
+            .map_err(|e| e.to_string())?
+            .clone()
+            .ok_or("Capture service is not ready")?;
+        let (reply, result) = std::sync::mpsc::channel();
+        sender
+            .try_send((settings, reply))
+            .map_err(|_| "Capture service is busy; try again in a moment")?;
+        result.recv().map_err(|_| "Capture service stopped")?
+    })();
+    activity.starting.store(false, Ordering::SeqCst);
+    match &result {
+        Ok(()) => activity::event(
+            app,
+            "Replay buffer started. Use Save clip or your shortcut to keep a clip.",
+        ),
+        Err(error) => activity::capture_error(app, error.clone()),
+    };
+    result
 }
 fn spawn_capture(
     app: &tauri::AppHandle,
@@ -468,7 +488,7 @@ fn spawn_capture(
     if let Some(exit) = child.try_wait().map_err(|e| e.to_string())? {
         let _ = fs::remove_file(runtime_dir()?.join("afterglow-recorder.pid"));
         return Err(format!(
-            "Capture exited ({exit}). Check Capture setup → Capture log."
+            "Capture exited ({exit}). Open Settings → Diagnostics for the recorder error."
         ));
     }
     if let Some(stdout) = child.stdout.take() {
@@ -502,6 +522,12 @@ fn preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .app_config_dir()
         .map(|p| p.join("preferences.json"))
         .map_err(|e| e.to_string())
+}
+#[tauri::command]
+fn set_editor_active(app: tauri::AppHandle, active: bool) {
+    app.state::<activity::Activity>()
+        .editor
+        .store(active, Ordering::SeqCst);
 }
 #[tauri::command]
 fn get_preferences(app: tauri::AppHandle) -> Result<preferences::Preferences, String> {
@@ -713,6 +739,7 @@ async fn trim_clip(
     name: String,
     start: f64,
     end: f64,
+    precise: Option<bool>,
 ) -> Result<String, String> {
     let root = output_dir(&app)?;
     let prefs = app
@@ -723,7 +750,13 @@ async fn trim_clip(
         .clone();
     let room = storage::export_room(&root, prefs.storage_limit_mb)?;
     tauri::async_runtime::spawn_blocking(move || {
-        clips::trim_limited(&root, &name, start, end, room)
+        let result =
+            clips::trim_with_mode(&root, &name, start, end, room, precise.unwrap_or(false));
+        match &result {
+            Ok(_) => activity::event(&app, "Trimmed copy exported"),
+            Err(error) => activity::event(&app, &format!("Trim export failed: {error}")),
+        };
+        result
     })
     .await
     .map_err(|e| e.to_string())?
@@ -852,6 +885,9 @@ fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
 }
 #[tauri::command]
 fn game_mode(app: tauri::AppHandle) -> Result<(), String> {
+    if activity::editor_busy(&app) {
+        return Err("Finish or close the clip editor before entering game mode".into());
+    }
     let state = app.state::<Recorder>();
     {
         let mut slot = state.0.lock().map_err(|e| e.to_string())?;
@@ -862,6 +898,9 @@ fn game_mode(app: tauri::AppHandle) -> Result<(), String> {
     background_library(&app)
 }
 fn background_library(app: &tauri::AppHandle) -> Result<(), String> {
+    app.state::<activity::Activity>()
+        .editor
+        .store(false, Ordering::SeqCst);
     use webkit2gtk::{WebContextExt, WebViewExt};
     let window = app
         .get_webview_window("main")
@@ -967,6 +1006,16 @@ fn start_memory_monitor(app: tauri::AppHandle) {
                 .lock()
                 .map(|mut slot| is_running(&mut slot).unwrap_or(false))
                 .unwrap_or(false);
+            if last_running == Some(true)
+                && !running
+                && !app.state::<Recorder>().2.load(Ordering::SeqCst)
+                && !app
+                    .state::<activity::Activity>()
+                    .starting
+                    .load(Ordering::SeqCst)
+            {
+                activity::capture_error(&app,"Replay stopped unexpectedly. Open Settings → Diagnostics for the recorder error.".into());
+            }
             if last_running != Some(running) {
                 if let Some(controls) = app.try_state::<TrayControls>() {
                     let _ = controls.start.set_enabled(!running);
@@ -982,11 +1031,8 @@ fn start_memory_monitor(app: tauri::AppHandle) {
                 }
                 last_running = Some(running);
             }
-            if running && over_budget && app.get_webview_window("main").is_some() {
-                let handle = app.clone();
-                let _ = app.run_on_main_thread(move || {
-                    let _ = game_mode(handle);
-                });
+            if over_budget && activity::editor_busy(&app) {
+                let _ = app.emit("memory-pressure", ());
             }
             std::thread::sleep(std::time::Duration::from_secs(3));
         }
@@ -1052,6 +1098,7 @@ fn main() {
         }).build())
         .setup(|app| {
             let prefs=preferences::load(&preferences_path(app.handle()).map_err(std::io::Error::other)?).unwrap_or_else(|error|{eprintln!("{error}");preferences::Preferences::default()});
+            let _=preferences::store(&preferences_path(app.handle()).map_err(std::io::Error::other)?,&prefs);
             app.manage(preferences::PreferencesState(Mutex::new(prefs.clone())));
             let root = output_dir(app.handle()).map_err(std::io::Error::other)?;
             app.manage(media::MediaServer::start(root).map_err(std::io::Error::other)?);
@@ -1062,7 +1109,7 @@ fn main() {
             start_capture_worker(app.handle()).map_err(std::io::Error::other)?;
             control::start(app.handle().clone()).map_err(std::io::Error::other)?;
             refresh_hotkeys(app.handle());
-            if prefs.auto_start_replay {let handle=app.handle().clone();tauri::async_runtime::spawn_blocking(move||{let _=toggle_replay(&handle);});}
+            if prefs.auto_start_replay {let handle=app.handle().clone();tauri::async_runtime::spawn_blocking(move||{let _=start_saved_replay(&handle);});}
             if prefs.start_in_tray&&!std::env::args().any(|a|a=="--show")&&app.try_state::<TrayControls>().is_some(){let handle=app.handle().clone();let _=app.run_on_main_thread(move||{let _=background_library(&handle);});}
             start_memory_monitor(app.handle().clone());
             Ok(())
@@ -1078,6 +1125,7 @@ fn main() {
         .manage(hotkeys::HotkeyState::default())
         .manage(SavePending::default())
         .manage(CaptureWorker::default())
+        .manage(activity::Activity::default())
         .invoke_handler(tauri::generate_handler![
             status,
             start_replay,
@@ -1090,7 +1138,7 @@ fn main() {
             trim_clip,
             open_library,
             capture_options,
-            game_mode, get_preferences,save_preferences,apply_shortcuts
+            game_mode, get_preferences,save_preferences,apply_shortcuts,set_editor_active
         ])
         .build(tauri::generate_context!())
         .expect("Could not launch Afterglow")

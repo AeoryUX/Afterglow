@@ -13,6 +13,8 @@ pub fn command(program: &str, input: File) -> Command {
         .env_clear()
         .env("PATH", "/usr/bin")
         .env("LC_ALL", "C")
+        .env("OPENBLAS_NUM_THREADS", "1")
+        .env("OMP_NUM_THREADS", "2")
         .stdin(Stdio::from(input))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -28,7 +30,6 @@ pub fn command(program: &str, input: File) -> Command {
             }
             for (resource, limit) in [
                 (libc::RLIMIT_CORE, 0),
-                (libc::RLIMIT_AS, 2 * 1024 * 1024 * 1024),
                 (libc::RLIMIT_CPU, 600),
                 (libc::RLIMIT_FSIZE, 1024 * 1024 * 1024),
             ] {
@@ -140,6 +141,27 @@ fn install_filter(filter: &[libc::sock_filter]) -> io::Result<()> {
     }
     Ok(())
 }
+fn resident_bytes(pid: u32) -> Option<u64> {
+    if let Ok(text) = std::fs::read_to_string(format!("/proc/{pid}/smaps_rollup")) {
+        if let Some(bytes) = text.lines().find_map(|line| {
+            line.strip_prefix("Pss:")
+                .and_then(|v| v.split_whitespace().next())
+                .and_then(|v| v.parse::<u64>().ok())
+                .map(|n| n * 1024)
+        }) {
+            return Some(bytes);
+        }
+    }
+    std::fs::read_to_string(format!("/proc/{pid}/status"))
+        .ok()?
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("VmRSS:")
+                .and_then(|v| v.split_whitespace().next())
+                .and_then(|v| v.parse::<u64>().ok())
+                .map(|n| n * 1024)
+        })
+}
 fn bounded_read(mut stream: impl Read, limit: usize) -> Vec<u8> {
     let mut data = Vec::new();
     let mut buf = [0; 4096];
@@ -162,7 +184,19 @@ pub fn run(mut command: Command, timeout: Duration) -> Result<Vec<u8>, String> {
     let err =
         std::thread::spawn(move || stderr.map(|s| bounded_read(s, 65536)).unwrap_or_default());
     let deadline = Instant::now() + timeout;
+    let mut memory_check = Instant::now();
     let status = loop {
+        if memory_check.elapsed() >= Duration::from_millis(100) {
+            memory_check = Instant::now();
+            if resident_bytes(child.id()).is_some_and(|bytes| bytes > 384 * 1024 * 1024) {
+                unsafe {
+                    libc::kill(-(child.id() as i32), libc::SIGKILL);
+                }
+                let _ = child.kill();
+                let _ = child.wait();
+                break Err("Video processing exceeded its safe RAM budget. Use Fast trim or a lower recording resolution. The original clip was kept.".into());
+            }
+        }
         match child.try_wait() {
             Ok(Some(status)) => break Ok(status),
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(25)),
@@ -184,7 +218,7 @@ pub fn run(mut command: Command, timeout: Duration) -> Result<Vec<u8>, String> {
     let status = status?;
     if !status.success() {
         return Err(format!(
-            "Video processing failed: {}",
+            "Video processing failed ({status}): {}",
             String::from_utf8_lossy(&error)
                 .chars()
                 .take(1000)
@@ -217,6 +251,13 @@ mod tests {
             .unwrap_err()
             .contains("timed out"));
         assert!(start.elapsed() < Duration::from_secs(2));
+    }
+    #[test]
+    fn memory_heavy_jobs_fail_without_terminating_the_app() {
+        let mut cmd = command("python3", File::open("/dev/null").unwrap());
+        cmd.args(["-c", "import time; chunks=[]\nfor i in range(60): chunks.append(bytearray(8*1024*1024)); time.sleep(.02)\ntime.sleep(5)"]);
+        let error = run(cmd, Duration::from_secs(10)).unwrap_err();
+        assert!(error.contains("safe RAM budget"), "{error}");
     }
     #[test]
     fn job_output_is_bounded() {

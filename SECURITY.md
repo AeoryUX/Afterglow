@@ -1,6 +1,6 @@
 # Afterglow security
 
-Version 0.1.4 retains the 0.1.3 protections and adds an owner-only local control channel for background save/toggle/show actions. The socket is mode 0600 inside a private runtime directory, and both ends validate SO_PEERCRED. New saves use the same storage-budget checks from the UI, tray and shortcuts. Legacy --save-replay pidfd fallback remains available for an older running version.
+Version 0.1.5 retains the 0.1.3 protections and adds an owner-only local control channel for background save/toggle/show actions. The socket is mode 0600 inside a private runtime directory, and both ends validate SO_PEERCRED. New saves use the same storage-budget checks from the UI, tray and shortcuts. Legacy --save-replay pidfd fallback remains available for an older running version.
 
 Preferences are stored atomically as mode 0600 in the app configuration directory. Shortcut inputs are validated against allowed modifiers and key names; the launched command is the shell-quoted current executable with a fixed action flag. Hyprland bindings are checked for collisions and its configuration files are not modified. No general shell-execution API is exposed to the frontend.
 
@@ -17,7 +17,7 @@ Clip reads open regular files with O_NOFOLLOW and O_NONBLOCK relative to an open
 
 FFmpeg and FFprobe run from /usr/bin with a cleared environment, explicit local-file protocols and the MOV/MP4 demuxer. A Linux x86_64 seccomp filter denies network socket operations, process creation (threads remain allowed), ptrace/process-memory access and io_uring setup. PR_SET_NO_NEW_PRIVS prevents privilege elevation. Processing is refused if these restrictions cannot be applied. Jobs die when Afterglow exits.
 
-Only one probe/export job runs at a time. Probe timeout is 10 seconds; export timeout and CPU limit are 10 minutes. Each tool has a 2 GiB virtual address limit, a 1 GiB output-file limit, disabled core dumps, and bounded captured diagnostic output. These are processing limits, not a promise that total resident RAM always stays below 1 GB. No persistent extra service is introduced.
+Only one probe/export job runs at a time. Probe timeout is 10 seconds; export timeout and CPU limit are 10 minutes. Each tool has a sampled 384 MiB resident-memory guard (PSS when available, RSS fallback), a 1 GiB output-file limit, disabled core dumps, and bounded captured diagnostic output. The monitor checks about every 100 ms and terminates only the processing child on excess; transient growth between samples is possible. This replaces the 2 GiB virtual-address cap, which could reject legitimate FFmpeg library mappings. Fast trim copies streams; frame-accurate trim uses two encoding threads and low-latency settings. The original is preserved and incomplete output removed on failure. These are processing limits, not a promise that total resident RAM always stays below 1 GB. No persistent extra service is introduced.
 
 The Tauri capability grants only event listen/unlisten and the enumerated application commands to the local main window. External page navigation is denied. CSP restricts scripts to the bundled app and disables objects, base URLs, form submissions, and framing. The development server binds only to loopback.
 

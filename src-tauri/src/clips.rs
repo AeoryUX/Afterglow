@@ -71,6 +71,9 @@ pub fn rename(root: &Path, name: &str, new_name: &str) -> Result<(), String> {
     dir.rename(name, new_name, true)
         .map_err(|e| format!("Cannot rename clip: {e}"))
 }
+pub fn is_processing() -> bool {
+    MEDIA_JOB.try_lock().is_err()
+}
 static MEDIA_JOB: std::sync::Mutex<()> = std::sync::Mutex::new(());
 pub fn duration(root: &Path, name: &str) -> Result<f64, String> {
     let _job = MEDIA_JOB
@@ -119,12 +122,23 @@ pub fn validate_trim(start: f64, end: f64, length: f64) -> Result<(), String> {
 pub fn trim(root: &Path, name: &str, start: f64, end: f64) -> Result<String, String> {
     trim_limited(root, name, start, end, None)
 }
+#[cfg(test)]
 pub fn trim_limited(
     root: &Path,
     name: &str,
     start: f64,
     end: f64,
     max_output_bytes: Option<u64>,
+) -> Result<String, String> {
+    trim_with_mode(root, name, start, end, max_output_bytes, true)
+}
+pub fn trim_with_mode(
+    root: &Path,
+    name: &str,
+    start: f64,
+    end: f64,
+    max_output_bytes: Option<u64>,
+    precise: bool,
 ) -> Result<String, String> {
     use std::{
         io::{Seek, SeekFrom},
@@ -173,10 +187,10 @@ pub fn trim_limited(
             "file",
             "-threads",
             "2",
-            "-f",
-            "mov",
             "-ss",
             &start.to_string(),
+            "-f",
+            "mov",
             "-i",
             "/proc/self/fd/0",
             "-t",
@@ -185,22 +199,28 @@ pub fn trim_limited(
             "0:v:0",
             "-map",
             "0:a?",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "fast",
-            "-crf",
-            "18",
-            "-threads",
-            "2",
-            "-c:a",
-            "aac",
-            "-f",
-            "mp4",
-            "-movflags",
-            "+faststart",
-            "/proc/self/fd/1",
         ]);
+        if precise {
+            command.args([
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-tune",
+                "zerolatency",
+                "-crf",
+                "18",
+                "-threads",
+                "2",
+                "-filter_threads",
+                "1",
+                "-c:a",
+                "aac",
+            ]);
+        } else {
+            command.args(["-c", "copy", "-avoid_negative_ts", "make_zero"]);
+        }
+        command.args(["-f", "mp4", "-movflags", "+faststart", "/proc/self/fd/1"]);
         crate::processing::run(command, std::time::Duration::from_secs(600))?;
         dir.rename(&temporary, &output_name, true)
             .map_err(|e| e.to_string())?;
@@ -280,7 +300,7 @@ mod media_tests {
                 "-f",
                 "lavfi",
                 "-i",
-                "testsrc2=size=320x180:rate=30",
+                "testsrc2=size=1920x1080:rate=60",
                 "-f",
                 "lavfi",
                 "-i",
@@ -305,6 +325,10 @@ mod media_tests {
         assert!((duration(&root, &output).unwrap() - 1.5).abs() < 0.15);
         assert_eq!(fs::read(&source).unwrap(), original);
         assert_eq!(list(&root).unwrap().len(), 2);
+        let fast = trim_with_mode(&root, "original.mp4", 1.0, 2.5, None, false).unwrap();
+        assert!(duration(&root, &fast).unwrap() > 0.1);
+        assert_eq!(fs::read(&source).unwrap(), original);
+        fs::remove_file(root.join(fast)).unwrap();
         assert!(trim(&root, "original.mp4", 0.0, 100.0).is_err());
         assert!(trim_limited(&root, "original.mp4", 1.0, 2.5, Some(512)).is_err());
         assert_eq!(fs::read(&source).unwrap(), original);

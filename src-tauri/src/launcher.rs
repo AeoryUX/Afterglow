@@ -29,6 +29,65 @@ pub fn doctor() {
         );
     }
     println!("A user launcher override takes precedence over the system launcher.");
+    for tool in ["nvidia-smi", "gpu-screen-recorder", "ffmpeg"] {
+        let args = if tool == "nvidia-smi" {
+            vec!["--query-gpu=name", "--format=csv,noheader"]
+        } else if tool == "ffmpeg" {
+            vec!["-version"]
+        } else {
+            vec!["--version"]
+        };
+        match crate::system::command(tool).args(args).output() {
+            Ok(output) => println!(
+                "{tool}: {} {}",
+                String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .take(2)
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+                String::from_utf8_lossy(&output.stderr)
+                    .lines()
+                    .take(2)
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            ),
+            Err(error) => println!("{tool}: {error}"),
+        };
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let data = std::env::var_os("XDG_DATA_HOME")
+            .filter(|p| !p.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(home).join(".local/share"));
+        for name in ["capture.log", "events.log"] {
+            let path = data.join("dev.afterglow.desktop/logs").join(name);
+            if let Ok(mut file) = crate::private_fs::Directory::open(path.parent().unwrap())
+                .and_then(|d| d.read(name))
+            {
+                use std::io::{Read, Seek, SeekFrom};
+                let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+                let _ = file.seek(SeekFrom::Start(size.saturating_sub(65536)));
+                let mut text = String::new();
+                let _ = file.take(65536).read_to_string(&mut text);
+                let lines = text
+                    .lines()
+                    .filter(|v| !v.contains("gsr info: update fps:"))
+                    .collect::<Vec<_>>();
+                println!(
+                    "Recent {name}:\n{}",
+                    lines
+                        .into_iter()
+                        .rev()
+                        .take(20)
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
+            }
+        }
+    }
 }
 fn describe(path: &Path, label: &str) {
     match fs::metadata(path) {

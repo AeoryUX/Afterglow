@@ -1,6 +1,6 @@
 # Local binary package recipe for the signed pacman repository.
 pkgname=afterglow-bin
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc='NVIDIA-first instant replay and local gameplay clips for Linux'
 arch=('x86_64')
@@ -10,7 +10,7 @@ provides=('afterglow')
 conflicts=('afterglow')
 options=('!strip' '!debug')
 source=("afterglow-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('483835f636533444e8ef9e33178d15cecba507b3c8d60390a04d4848ccab84b0')
+sha256sums=('5a7ba5b34c0a9b1447590a11f642a1b64f6bf4b751cb86433929a5e277652c3c')
 
 package() {
     local release="$srcdir/afterglow-${pkgver}-linux-x86_64"

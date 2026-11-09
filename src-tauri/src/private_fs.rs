@@ -66,13 +66,17 @@ impl Directory {
         self.open_at(name, libc::O_RDWR | libc::O_CREAT | libc::O_EXCL)
     }
     pub fn private_log(&self, name: &str) -> io::Result<File> {
-        let file = self.open_at(name, libc::O_WRONLY | libc::O_CREAT)?;
+        let file = self.append_log(name)?;
+        file.set_len(0)?;
+        Ok(file)
+    }
+    pub fn append_log(&self, name: &str) -> io::Result<File> {
+        let file = self.open_at(name, libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND)?;
         let meta = file.metadata()?;
         if meta.uid() != unsafe { libc::geteuid() } || meta.nlink() != 1 {
             return Err(io::Error::other("Unsafe log ownership or hard link"));
         }
         file.set_permissions(fs::Permissions::from_mode(0o600))?;
-        file.set_len(0)?;
         Ok(file)
     }
     pub fn rename(&self, old: &str, new: &str, no_replace: bool) -> io::Result<()> {

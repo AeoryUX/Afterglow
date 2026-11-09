@@ -20,6 +20,7 @@
     "allow-game-mode",
     "allow-get-preferences",
     "allow-save-preferences",
-    "allow-apply-shortcuts"
+    "allow-apply-shortcuts",
+    "allow-set-editor-active"
   ]
 }

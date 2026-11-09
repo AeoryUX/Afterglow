@@ -44,6 +44,7 @@ impl Default for Shortcuts {
 pub struct Preferences {
     pub close_to_tray: bool,
     pub auto_start_replay: bool,
+    pub startup_policy_version: u32,
     pub start_in_tray: bool,
     pub storage_limit_mb: u32,
     pub shortcuts: Shortcuts,
@@ -53,7 +54,8 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             close_to_tray: true,
-            auto_start_replay: false,
+            auto_start_replay: true,
+            startup_policy_version: 1,
             start_in_tray: false,
             storage_limit_mb: 0,
             shortcuts: Shortcuts::default(),
@@ -84,7 +86,15 @@ pub fn load(path: &Path) -> Result<Preferences, String> {
     if text.len() > 65536 {
         return Err("Preferences are too large".into());
     }
-    let p = serde_json::from_str(&text).map_err(|e| format!("Cannot read preferences: {e}"))?;
+    let value: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("Cannot read preferences: {e}"))?;
+    let needs_migration = value.get("startupPolicyVersion").is_none();
+    let mut p: Preferences =
+        serde_json::from_value(value).map_err(|e| format!("Cannot read preferences: {e}"))?;
+    if needs_migration {
+        p.auto_start_replay = true;
+        p.startup_policy_version = 1;
+    }
     validate(&p)?;
     Ok(p)
 }
@@ -115,6 +125,13 @@ mod tests {
         prefs.storage_limit_mb = 5000;
         store(&path, &prefs).unwrap();
         assert_eq!(load(&path).unwrap().storage_limit_mb, 5000);
+        prefs.auto_start_replay = false;
+        store(&path, &prefs).unwrap();
+        assert!(!load(&path).unwrap().auto_start_replay);
+        let mut old = serde_json::to_value(&prefs).unwrap();
+        old.as_object_mut().unwrap().remove("startupPolicyVersion");
+        std::fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+        assert!(load(&path).unwrap().auto_start_replay);
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(
             std::fs::metadata(path).unwrap().permissions().mode() & 0o777,

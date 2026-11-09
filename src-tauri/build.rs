@@ -16,6 +16,7 @@ fn main() {
             "get_preferences",
             "save_preferences",
             "apply_shortcuts",
+            "set_editor_active",
         ]),
     ))
     .expect("Cannot build application permissions");
