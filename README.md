@@ -30,3 +30,5 @@ Version 0.1.4 adds Settings tabs and an easy Hyprland keybind editor, total clip
 Version 0.1.5 starts replay automatically, makes fast trimming the default, preserves the editor after failed exports, and keeps memory pressure from closing the window. Capture failures and export diagnostics are visible. Update with `paru -Syu afterglow-bin`, choose Quit Afterglow in the tray, then reopen. Details: https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.5
 
 Version 0.1.6 adds shortcut dropdowns, fixes WebKit key capture, keeps capture controls usable after library errors, and repairs saved X11/Wayland settings that conflict with the current desktop. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.6
+
+Version 0.1.7 separates Home and the clip library, highlights active Keybinds, adds a saved-clip sound with mute, supports single keys including F2 and slash, and refreshes the interface with Caelestia surfaces and glowing switches. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.7
