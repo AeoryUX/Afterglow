@@ -28,3 +28,5 @@ Version 0.1.3 adds private files, restricted video processing, tighter native pe
 Version 0.1.4 adds Settings tabs and an easy Hyprland keybind editor, total clip-library storage budgets, session/resolution/cursor controls, and a white tray icon. Closing keeps replay alive by default. Use Quit Afterglow in the tray, then reopen after upgrading. Details: https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.4
 
 Version 0.1.5 starts replay automatically, makes fast trimming the default, preserves the editor after failed exports, and keeps memory pressure from closing the window. Capture failures and export diagnostics are visible. Update with `paru -Syu afterglow-bin`, choose Quit Afterglow in the tray, then reopen. Details: https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.5
+
+Version 0.1.6 adds shortcut dropdowns, fixes WebKit key capture, keeps capture controls usable after library errors, and repairs saved X11/Wayland settings that conflict with the current desktop. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.6
