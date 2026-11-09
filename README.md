@@ -35,3 +35,5 @@ Version 0.1.7 separates Home and the clip library, highlights active Keybinds, a
 
 
 Version 0.1.8 adds desktop login startup and a window option, more built-in themes, automatic shortcut selection and Home sync, and compatibility with Hyprland 0.57.1 Lua bindings. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.8
+
+Version 0.1.9 adds explicit player controls, software video presentation, a compatible temporary preview, per-clip Play/Edit/Open/Delete actions, and app window buttons. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.9
