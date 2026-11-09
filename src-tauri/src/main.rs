@@ -488,7 +488,8 @@ fn spawn_capture(
     if let Some(exit) = child.try_wait().map_err(|e| e.to_string())? {
         let _ = fs::remove_file(runtime_dir()?.join("afterglow-recorder.pid"));
         return Err(format!(
-            "Capture exited ({exit}). Open Settings → Diagnostics for the recorder error."
+            "Capture exited ({exit}). {}",
+            activity::log_tail(app)
         ));
     }
     if let Some(stdout) = child.stdout.take() {
@@ -657,6 +658,17 @@ fn detected_session() -> String {
         "none"
     }
     .into()
+}
+fn repair_saved_session(settings: &mut Settings, actual: &str) -> bool {
+    if ["wayland", "x11"].contains(&actual)
+        && ["wayland", "x11"].contains(&settings.session.as_str())
+        && settings.session != actual
+    {
+        settings.session = "auto".into();
+        true
+    } else {
+        false
+    }
 }
 fn resolve_session(preferred: &str, actual: &str) -> Result<String, String> {
     let selected = if preferred.is_empty() || preferred == "auto" {
@@ -1097,7 +1109,8 @@ fn main() {
             (cfg!(debug_assertions) && url.scheme()=="http" && url.host_str()==Some("localhost") && url.port()==Some(1420))
         }).build())
         .setup(|app| {
-            let prefs=preferences::load(&preferences_path(app.handle()).map_err(std::io::Error::other)?).unwrap_or_else(|error|{eprintln!("{error}");preferences::Preferences::default()});
+            let mut prefs=preferences::load(&preferences_path(app.handle()).map_err(std::io::Error::other)?).unwrap_or_else(|error|{eprintln!("{error}");preferences::Preferences::default()});
+            if let Some(capture)=prefs.capture.as_mut() {if repair_saved_session(capture,&detected_session()) {activity::event(app.handle(),"Saved capture session did not match the desktop; reset to Auto");}}
             let _=preferences::store(&preferences_path(app.handle()).map_err(std::io::Error::other)?,&prefs);
             app.manage(preferences::PreferencesState(Mutex::new(prefs.clone())));
             let root = output_dir(app.handle()).map_err(std::io::Error::other)?;
@@ -1207,6 +1220,16 @@ mod tests {
     fn refuses_root_execution() {
         assert!(initialize_security(0).is_err());
         assert!(initialize_security(1000).is_ok());
+    }
+    #[test]
+    fn saved_session_repairs_after_changing_desktops() {
+        let mut settings = Settings::default();
+        settings.session = "x11".into();
+        assert!(repair_saved_session(&mut settings, "wayland"));
+        assert_eq!(settings.session, "auto");
+        settings.session = "wayland".into();
+        assert!(!repair_saved_session(&mut settings, "wayland"));
+        assert!(!repair_saved_session(&mut settings, "none"));
     }
     #[test]
     fn session_choice_matches_the_desktop() {

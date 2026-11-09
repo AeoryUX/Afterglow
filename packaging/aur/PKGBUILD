@@ -1,7 +1,7 @@
 # Maintainer: AUR maintainer account pending
 # Native releases are public; an AUR entry has not been submitted.
 pkgname=afterglow-bin
-pkgver=0.1.5
+pkgver=0.1.6
 pkgrel=1
 url='https://github.com/AeoryUX/Afterglow'
 pkgdesc='NVIDIA-first instant replay and local gameplay clips for Linux'
@@ -12,7 +12,7 @@ provides=('afterglow')
 conflicts=('afterglow')
 options=('!strip' '!debug')
 source=("afterglow-${pkgver}-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v${pkgver}-packages/releases/v${pkgver}/afterglow-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('5a7ba5b34c0a9b1447590a11f642a1b64f6bf4b751cb86433929a5e277652c3c')
+sha256sums=('288b33b29d6f0fb92a382fc5a8d50f935e3e716cc73fe2133152f516384d77aa')
 
 package() {
     local release="$srcdir/afterglow-${pkgver}-linux-x86_64"

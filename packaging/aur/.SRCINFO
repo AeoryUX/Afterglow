@@ -1,6 +1,6 @@
 pkgbase = afterglow-bin
 	pkgdesc = NVIDIA-first instant replay and local gameplay clips for Linux
-	pkgver = 0.1.5
+	pkgver = 0.1.6
 	pkgrel = 1
 	url = https://github.com/AeoryUX/Afterglow
 	arch = x86_64
@@ -21,7 +21,7 @@ pkgbase = afterglow-bin
 	conflicts = afterglow
 	options = !strip
 	options = !debug
-	source = afterglow-0.1.5-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v0.1.5-packages/releases/v0.1.5/afterglow-0.1.5-linux-x86_64.tar.gz
-	sha256sums = 5a7ba5b34c0a9b1447590a11f642a1b64f6bf4b751cb86433929a5e277652c3c
+	source = afterglow-0.1.6-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v0.1.6-packages/releases/v0.1.6/afterglow-0.1.6-linux-x86_64.tar.gz
+	sha256sums = 288b33b29d6f0fb92a382fc5a8d50f935e3e716cc73fe2133152f516384d77aa
 
 pkgname = afterglow-bin

@@ -1,8 +1,8 @@
 # Distribution packaging validation
 
-## Version 0.1.5 (2026-11-09)
+## Version 0.1.6 (2026-11-09)
 
-The signed package is afterglow-bin-0.1.5-1-x86_64.pkg.tar.zst. The executable is built from the committed source with the vendored GLib safety fix and compiled static interface. Corresponding source includes the patched crate, original license, patch notes, audit script, and dependency review.
+The signed package is afterglow-bin-0.1.6-1-x86_64.pkg.tar.zst. The executable is built from the committed source with the vendored GLib safety fix and compiled static interface. Corresponding source includes the patched crate, original license, patch notes, audit script, and dependency review.
 
 The native executable embeds the white tray icon. Settings, control-channel, and keybind code add no mandatory package dependencies. Hyprland supplies its optional hyprctl command.
 
@@ -10,7 +10,7 @@ The launcher remains mode 0644 with the same application identity. Application-c
 
 Both native and Arch archive generation are exercised under umask 077. The actual package is extracted with original permissions and checked for launcher/icon/directory/executable modes, valid desktop metadata, desktop-file-utils dependency, and the security document. Pacman/libalpm reads package and repository metadata. Package/database signatures are verified with a separate public-key-only client. The public downloads are compared against the prepared artifacts after publishing.
 
-The signed repository retains previous package files for clients using a cached database. The future AUR recipe uses the immutable v0.1.5-packages snapshot. An AUR entry has not been submitted.
+The signed repository retains previous package files for clients using a cached database. The future AUR recipe uses the immutable v0.1.6-packages snapshot. An AUR entry has not been submitted.
 
 Native WebKit testing uses the existing GTK/WebKit test payload with the new executable. Video processing runs the real host FFmpeg with the new restrictions. Capture and GPU detection are test fixtures, not hardware capture. The previous 0.1.1 AppImage was not rebuilt and does not contain this release's protections; the current update is the signed Arch package and native archive.
 

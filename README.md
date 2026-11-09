@@ -1,4 +1,4 @@
-# Afterglow 0.1.5 alpha
+# Afterglow 0.1.6 alpha
 
 A gameplay clipping app for Linux, targeting CachyOS + Hyprland and NVIDIA first. Afterglow provides replay controls and a local clip library, using GPU Screen Recorder for capture and FFmpeg for edits. AMD and Intel support follow NVIDIA hardware validation. The launcher fix preserves the existing application ID, clips, and settings.
 
@@ -28,6 +28,10 @@ The setup pins publisher fingerprint `0BD7BEF64831B7CD5EA167C5952EE3DFB307F111`,
 
 The package pulls in GPU Screen Recorder, FFmpeg, GTK3/WebKitGTK, Ayatana tray support, playback plugins, xdg-utils, and NVIDIA user-space tools. Your existing NVIDIA kernel driver must already work with your CachyOS kernel. The package does not select a kernel module. This build targets current Linux x86_64 with glibc >= 2.39.
 
+## Controls fixed in 0.1.6
+
+Shortcut editing now offers Modifier and Key dropdowns, so compositor interception cannot prevent choosing a combination. Key capture also accepts WebKit events without a physical key code. Capture controls remain available when loading the clip list fails, and refresh errors are visible. Recorder startup failures show the actual recent log beside the controls.
+
 ## Use
 
 Replay starts automatically when Afterglow opens, using saved capture settings (or the full display by default). The first upgrade from 0.1.4 enables this once; afterward your choice in **Settings → Appearance & behavior** is preserved. Open **Settings → Capture** to choose your monitor and restart replay to apply changes. Save a clip with **Save clip** or your configured shortcut; buffering alone does not create a library file. The default replay is 60 seconds at 12 Mbps, H.264, 60 FPS. Capture settings include Auto/Wayland/X11 session selection, native/1080p/720p resolution, cursor visibility, system audio and microphone. A session choice must match the current desktop; Xwayland inside Hyprland does not turn it into an X11 desktop.
@@ -48,7 +52,7 @@ The clip library supports search, playback, rename, open-folder, and exporting a
 
 ## Validation and limits
 
-Thirty-one backend tests and native UI/playback/trim/theme/background tests passed with a simulated recorder. One packaged test measured approximately 438 MB with the library open and 247 MB in the tray while the fixture held a resident 90 MB buffer. These figures are not a GTX 1660 Super recording benchmark or a universal RAM ceiling. Real NVIDIA/Wayland capture, permissions, audio sync, and game performance still require hardware testing.
+Thirty-two backend tests and native UI/playback/trim/theme/background tests passed with a simulated recorder. One packaged test measured approximately 438 MB with the library open and 247 MB in the tray while the fixture held a resident 90 MB buffer. These figures are not a GTX 1660 Super recording benchmark or a universal RAM ceiling. Real NVIDIA/Wayland capture, permissions, audio sync, and game performance still require hardware testing.
 
 The RAM target is below 1 GB, with a bounded encoded replay buffer, paused preview during export, and a sampled 384 MiB processing memory guard. High memory no longer automatically closes the window. Use **Game mode** or close to tray to release the library web process while recording continues. GPU VRAM, all filesystem cache, and external shared desktop/kernel allocations are outside that readout. See VALIDATION.md and PACKAGING-VALIDATION.md for the test boundaries.
 
@@ -62,7 +66,7 @@ The security protections introduced in 0.1.3 include private clip/log directorie
 
 Version 0.1.2 fixed a package bug that made the system desktop entry readable only by root. Existing installations can update with `paru -Syu afterglow-bin` or `yay -Syu afterglow-bin`. Close and reopen the launcher after updating. If it is still missing, run `afterglow --doctor` to inspect launcher paths, permissions, and a possible user override. Do not run the app with sudo.
 
-After upgrading, choose **Quit Afterglow** in the tray and reopen; closing the window keeps the old backend alive. Verify `afterglow --version` shows 0.1.5. Read Settings → Diagnostics → Capture log after a failed start or export. `afterglow --doctor` now includes recorder/FFmpeg/driver details and recent app/capture logs. Capture failures are also shown beside the replay controls. Check `nvidia-smi`, `gpu-screen-recorder --info`, and `gpu-screen-recorder --list-capture-options`. Follow the recorder package's KMS permission instructions and run Afterglow as your normal user. A clip must finish writing before FFprobe can read it for trimming.
+After upgrading, choose **Quit Afterglow** in the tray and reopen; closing the window keeps the old backend alive. Verify `afterglow --version` shows 0.1.6. Read Settings → Diagnostics → Capture log after a failed start or export. `afterglow --doctor` now includes recorder/FFmpeg/driver details and recent app/capture logs. Capture failures are also shown beside the replay controls. Check `nvidia-smi`, `gpu-screen-recorder --info`, and `gpu-screen-recorder --list-capture-options`. Follow the recorder package's KMS permission instructions and run Afterglow as your normal user. A clip must finish writing before FFprobe can read it for trimming.
 
 ## Build from source
 
@@ -78,6 +82,8 @@ Build a native executable with `npm run tauri build -- --no-bundle`. Run backend
 
 ## Source, packages, and license
 
-Application source is in this branch. Signed package files are in the [packages branch](https://github.com/AeoryUX/Afterglow/tree/packages); versioned native archives and corresponding source are under its `releases/` directory. See the [0.1.5 release](https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.5) and [repository information](https://github.com/AeoryUX/Afterglow/releases/tag/arch-repository).
+Application source is in this branch. Signed package files are in the [packages branch](https://github.com/AeoryUX/Afterglow/tree/packages); versioned native archives and corresponding source are under its `releases/` directory. See the [0.1.6 release](https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.6) and [repository information](https://github.com/AeoryUX/Afterglow/releases/tag/arch-repository).
 
 Afterglow's original code is GPL-3.0-only. See COPYING and LICENSE.md. Dependencies keep their respective licenses; notices are included in THIRD_PARTY_NOTICES.txt and package distributions.
+
+Saved X11/Wayland capture preferences that conflict with the current desktop are reset to Auto on launch. Explicit incompatible choices are disabled in the session selector; backend validation still rejects incompatible manual requests. A regression test verifies the saved-setting repair.
