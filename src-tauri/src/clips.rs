@@ -71,6 +71,12 @@ pub fn rename(root: &Path, name: &str, new_name: &str) -> Result<(), String> {
     dir.rename(name, new_name, true)
         .map_err(|e| format!("Cannot rename clip: {e}"))
 }
+pub fn delete(root: &Path, name: &str) -> Result<(), String> {
+    validate_name(name)?;
+    let dir = crate::private_fs::Directory::open(root).map_err(|e| e.to_string())?;
+    dir.read(name).map_err(|e| e.to_string())?;
+    dir.remove_checked(name).map_err(|e| e.to_string())
+}
 pub fn is_processing() -> bool {
     MEDIA_JOB.try_lock().is_err()
 }
@@ -229,9 +235,73 @@ pub fn trim_with_mode(
     dir.remove(&temporary);
     result
 }
+pub fn compatible_preview(
+    root: &Path,
+    name: &str,
+    cache: &Path,
+    cancelled: impl Fn() -> bool,
+) -> Result<(), String> {
+    use std::{os::unix::process::CommandExt, process::Stdio};
+    let _job = MEDIA_JOB
+        .try_lock()
+        .map_err(|_| "Another video operation is running. Try again when it finishes.")?;
+    let source = open_clip(root, name)?;
+    let dir = crate::private_fs::Directory::private(cache).map_err(|e| e.to_string())?;
+    let temp = crate::private_fs::temporary_name("preview").map_err(|e| e.to_string())?;
+    let output = dir.create(&temp).map_err(|e| e.to_string())?;
+    let result = (|| {
+        let mut command = crate::processing::command("ffmpeg", source);
+        command.stdout(Stdio::from(output));
+        unsafe {
+            command.pre_exec(|| {
+                let cap = libc::rlimit {
+                    rlim_cur: 64 * 1024 * 1024,
+                    rlim_max: 64 * 1024 * 1024,
+                };
+                if libc::setrlimit(libc::RLIMIT_FSIZE, &cap) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        command.args(["-hide_banner","-v","error","-nostdin","-y","-protocol_whitelist","file","-threads","2","-f","mov","-i","/proc/self/fd/0","-map","0:v:0","-map","0:a:0?","-vf","scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,fps=30,format=yuv420p","-c:v","libvpx","-deadline","realtime","-cpu-used","8","-threads","2","-b:v","1500k","-crf","12","-lag-in-frames","0","-auto-alt-ref","0","-c:a","libopus","-b:a","96k","-f","webm","/proc/self/fd/1"]);
+        crate::processing::run_cancellable(
+            command,
+            std::time::Duration::from_secs(180),
+            &cancelled,
+        )?;
+        if cancelled() {
+            return Err("Preview cancelled".into());
+        }
+        dir.rename(&temp, "preview.webm", false)
+            .map_err(|e| e.to_string())?;
+        if cancelled() {
+            dir.remove("preview.webm");
+            return Err("Preview cancelled".into());
+        }
+        Ok(())
+    })();
+    dir.remove(&temp);
+    result
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn delete_removes_only_the_selected_regular_clip() {
+        let root = std::env::temp_dir().join(crate::private_fs::temporary_name("delete").unwrap());
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("one.mp4"), b"one").unwrap();
+        fs::write(root.join("two.mp4"), b"two").unwrap();
+        std::os::unix::fs::symlink(root.join("two.mp4"), root.join("link.mp4")).unwrap();
+        assert!(delete(&root, "link.mp4").is_err());
+        assert!(delete(&root, "../two.mp4").is_err());
+        delete(&root, "one.mp4").unwrap();
+        assert!(!root.join("one.mp4").exists());
+        assert_eq!(fs::read(root.join("two.mp4")).unwrap(), b"two");
+        assert!(delete(&root, "one.mp4").is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn blocks_path_escape() {
         for name in [
@@ -325,6 +395,32 @@ mod media_tests {
         assert!((duration(&root, &output).unwrap() - 1.5).abs() < 0.15);
         assert_eq!(fs::read(&source).unwrap(), original);
         assert_eq!(list(&root).unwrap().len(), 2);
+        let cache = root.join("cache");
+        fs::create_dir(&cache).unwrap();
+        compatible_preview(&root, "original.mp4", &cache, || false).unwrap();
+        assert!(fs::metadata(cache.join("preview.webm")).unwrap().len() > 1000);
+        let result = crate::system::command("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=codec_name,width,height",
+                "-of",
+                "csv=p=0",
+            ])
+            .arg(cache.join("preview.webm"))
+            .output()
+            .unwrap();
+        let info = String::from_utf8_lossy(&result.stdout);
+        assert!(info.contains("vp8,1280,720"), "{info}");
+        fs::remove_file(cache.join("preview.webm")).unwrap();
+        assert!(compatible_preview(&root, "original.mp4", &cache, || true)
+            .unwrap_err()
+            .contains("cancelled"));
+        assert!(!cache.join("preview.webm").exists());
+        assert_eq!(fs::read(&source).unwrap(), original);
         let fast = trim_with_mode(&root, "original.mp4", 1.0, 2.5, None, false).unwrap();
         assert!(duration(&root, &fast).unwrap() > 0.1);
         assert_eq!(fs::read(&source).unwrap(), original);

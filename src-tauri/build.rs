@@ -17,6 +17,11 @@ fn main() {
             "save_preferences",
             "apply_shortcuts",
             "set_editor_active",
+            "window_action",
+            "report_playback_error",
+            "prepare_preview",
+            "open_clip_external",
+            "delete_clip",
         ]),
     ))
     .expect("Cannot build application permissions");

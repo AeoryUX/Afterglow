@@ -8,6 +8,7 @@ mod launcher;
 mod media;
 mod memory;
 mod preferences;
+mod preview;
 mod private_fs;
 mod processing;
 mod sound;
@@ -537,6 +538,9 @@ fn preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 }
 #[tauri::command]
 fn set_editor_active(app: tauri::AppHandle, active: bool) {
+    if !active {
+        app.state::<preview::Preview>().cancel();
+    }
     app.state::<activity::Activity>()
         .editor
         .store(active, Ordering::SeqCst);
@@ -779,6 +783,12 @@ fn list_clips(app: tauri::AppHandle) -> Result<Vec<clips::Clip>, String> {
     clips::list(&output_dir(&app)?)
 }
 #[tauri::command]
+fn delete_clip(app: tauri::AppHandle, name: String) -> Result<(), String> {
+    clips::delete(&output_dir(&app)?, &name)?;
+    activity::event(&app, &format!("Deleted clip: {name}"));
+    Ok(())
+}
+#[tauri::command]
 fn rename_clip(app: tauri::AppHandle, name: String, new_name: String) -> Result<(), String> {
     clips::rename(&output_dir(&app)?, &name, &new_name)
 }
@@ -822,6 +832,106 @@ async fn trim_clip(
             Err(error) => activity::event(&app, &format!("Trim export failed: {error}")),
         };
         result
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum WindowAction {
+    Minimize,
+    Maximize,
+    Close,
+    Drag,
+    State,
+}
+#[tauri::command]
+fn window_action(app: tauri::AppHandle, action: WindowAction) -> Result<bool, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("App window is not open")?;
+    match action {
+        WindowAction::Minimize => {
+            if app.try_state::<TrayControls>().is_some() {
+                background_library(&app)?;
+            } else {
+                window.minimize().map_err(|e| e.to_string())?;
+            }
+        }
+        WindowAction::Maximize => {
+            if window.is_maximized().map_err(|e| e.to_string())? {
+                window.unmaximize()
+            } else {
+                window.maximize()
+            }
+            .map_err(|e| e.to_string())?;
+        }
+        WindowAction::Close => {
+            window.close().map_err(|e| e.to_string())?;
+        }
+        WindowAction::Drag => {
+            window.start_dragging().map_err(|e| e.to_string())?;
+        }
+        WindowAction::State => (),
+    }
+    Ok(window.is_maximized().unwrap_or(false))
+}
+#[tauri::command]
+fn report_playback_error(
+    app: tauri::AppHandle,
+    name: String,
+    detail: String,
+) -> Result<(), String> {
+    clips::validate_name(&name)?;
+    activity::event(
+        &app,
+        &format!(
+            "Playback {}: {}",
+            name,
+            detail.chars().take(1200).collect::<String>()
+        ),
+    );
+    Ok(())
+}
+#[tauri::command]
+async fn prepare_preview(app: tauri::AppHandle, name: String) -> Result<String, String> {
+    clips::validate_name(&name)?;
+    let root = output_dir(&app)?;
+    let preview = app.state::<preview::Preview>();
+    let generation = preview.generation.clone();
+    let cache = preview.cache.clone();
+    let ticket = generation.fetch_add(1, Ordering::SeqCst) + 1;
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = clips::compatible_preview(&root, &name, &cache, || {
+            generation.load(Ordering::SeqCst) != ticket
+        });
+        if let Err(e) = &result {
+            activity::event(&app, &format!("Compatible preview: {e}"));
+        }
+        result?;
+        Ok(app.state::<media::MediaServer>().preview_url())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn open_clip_external(app: tauri::AppHandle, name: String) -> Result<(), String> {
+    let root = output_dir(&app)?;
+    clips::open_clip(&root, &name)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = system::command("xdg-open")
+            .arg(root.join(name))
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|e| e.to_string())?;
+        if result.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "Could not open clip externally: {}",
+                String::from_utf8_lossy(&result.stderr)
+            ))
+        }
     })
     .await
     .map_err(|e| e.to_string())?
@@ -963,6 +1073,7 @@ fn game_mode(app: tauri::AppHandle) -> Result<(), String> {
     background_library(&app)
 }
 fn background_library(app: &tauri::AppHandle) -> Result<(), String> {
+    app.state::<preview::Preview>().cancel();
     app.state::<activity::Activity>()
         .editor
         .store(false, Ordering::SeqCst);
@@ -1110,6 +1221,15 @@ fn initialize_security(uid: u32) -> Result<(), String> {
     Ok(())
 }
 fn main() {
+    // The capture subprocess has its own GPU path. WebKit preview uses software presentation
+    // to avoid NVIDIA/Wayland zero-copy video surfaces that can remain black.
+    if std::env::var_os("WEBKIT_GST_DISABLE_GL_SINK").is_none() {
+        std::env::set_var("WEBKIT_GST_DISABLE_GL_SINK", "1");
+    }
+    if std::env::var_os("GST_PLUGIN_FEATURE_RANK").is_none() {
+        std::env::set_var("GST_PLUGIN_FEATURE_RANK", "avdec_h264:300,avdec_aac:300");
+    }
+
     // Apply before creating any WebKit, capture, or editing threads/processes.
     if let Err(error) = initialize_security(unsafe { libc::geteuid() }) {
         eprintln!("{error}");
@@ -1171,7 +1291,9 @@ fn main() {
             if start_hidden {if let Some(window)=app.get_webview_window("main"){let _=window.hide();}}
             app.manage(preferences::PreferencesState(Mutex::new(prefs.clone())));
             let root = output_dir(app.handle()).map_err(std::io::Error::other)?;
-            app.manage(media::MediaServer::start(root).map_err(std::io::Error::other)?);
+            let cache=app.path().app_cache_dir()?.join("previews");fs::create_dir_all(cache.parent().unwrap())?;
+            app.manage(preview::Preview::new(cache.clone()).map_err(std::io::Error::other)?);
+            app.manage(media::MediaServer::start(root,cache).map_err(std::io::Error::other)?);
             if let Err(error)=setup_tray(app.handle()) {eprintln!("Tray initialization failed: {error}. The app remains usable; relaunch to restore the library from game mode.");}
             if let Some(window) = app.get_webview_window("main") {
                 reduce_web_cache(&window);
@@ -1209,7 +1331,7 @@ fn main() {
             trim_clip,
             open_library,
             capture_options,
-            game_mode, get_preferences,save_preferences,apply_shortcuts,set_editor_active
+            game_mode, get_preferences,save_preferences,apply_shortcuts,set_editor_active,window_action,report_playback_error,prepare_preview,open_clip_external,delete_clip
         ])
         .build(tauri::generate_context!())
         .expect("Could not launch Afterglow")

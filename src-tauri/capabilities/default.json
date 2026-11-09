@@ -21,6 +21,11 @@
     "allow-get-preferences",
     "allow-save-preferences",
     "allow-apply-shortcuts",
-    "allow-set-editor-active"
+    "allow-set-editor-active",
+    "allow-window-action",
+    "allow-report-playback-error",
+    "allow-prepare-preview",
+    "allow-open-clip-external",
+    "allow-delete-clip"
   ]
 }

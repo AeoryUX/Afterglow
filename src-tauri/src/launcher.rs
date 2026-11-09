@@ -54,6 +54,25 @@ pub fn doctor() {
             Err(error) => println!("{tool}: {error}"),
         };
     }
+    for codec in ["avdec_h264", "h264parse", "vp8dec", "matroskademux"] {
+        match crate::system::command("gst-inspect-1.0")
+            .args(["--exists", codec])
+            .output()
+        {
+            Ok(out) => println!(
+                "Playback {codec}: {}",
+                if out.status.success() {
+                    "available"
+                } else {
+                    "missing or could not load"
+                }
+            ),
+            Err(_) => {
+                println!("Playback plugins: gst-inspect-1.0 is unavailable; plugin checks skipped");
+                break;
+            }
+        }
+    }
     if let Some(home) = std::env::var_os("HOME") {
         let data = std::env::var_os("XDG_DATA_HOME")
             .filter(|p| !p.is_empty())

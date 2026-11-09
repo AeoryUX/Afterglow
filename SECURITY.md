@@ -1,6 +1,6 @@
 # Afterglow security
 
-Version 0.1.8 retains the 0.1.3 protections and adds an owner-only local control channel for background save/toggle/show actions. The socket is mode 0600 inside a private runtime directory, and both ends validate SO_PEERCRED. New saves use the same storage-budget checks from the UI, tray and shortcuts. Legacy --save-replay pidfd fallback remains available for an older running version.
+Version 0.1.9 retains the 0.1.3 protections and adds an owner-only local control channel for background save/toggle/show actions. The socket is mode 0600 inside a private runtime directory, and both ends validate SO_PEERCRED. New saves use the same storage-budget checks from the UI, tray and shortcuts. Legacy --save-replay pidfd fallback remains available for an older running version.
 
 Preferences are stored atomically as mode 0600 in the app configuration directory. Shortcut inputs are validated against allowed modifiers and key names; the launched command is the shell-quoted current executable with a fixed action flag. Hyprland bindings are checked for collisions. Runtime binding changes use either the legacy keyword API or Lua API; Lua bindings retain their own handles so removal targets only Afterglow bindings. No general shell-execution API is exposed to the frontend.
 
@@ -17,7 +17,7 @@ Clip reads open regular files with O_NOFOLLOW and O_NONBLOCK relative to an open
 
 FFmpeg and FFprobe run from /usr/bin with a cleared environment, explicit local-file protocols and the MOV/MP4 demuxer. A Linux x86_64 seccomp filter denies network socket operations, process creation (threads remain allowed), ptrace/process-memory access and io_uring setup. PR_SET_NO_NEW_PRIVS prevents privilege elevation. Processing is refused if these restrictions cannot be applied. Jobs die when Afterglow exits.
 
-Only one probe/export job runs at a time. Probe timeout is 10 seconds; export timeout and CPU limit are 10 minutes. Each tool has a sampled 384 MiB resident-memory guard (PSS when available, RSS fallback), a 1 GiB output-file limit, disabled core dumps, and bounded captured diagnostic output. The monitor checks about every 100 ms and terminates only the processing child on excess; transient growth between samples is possible. This replaces the 2 GiB virtual-address cap, which could reject legitimate FFmpeg library mappings. Fast trim copies streams; frame-accurate trim uses two encoding threads and low-latency settings. The original is preserved and incomplete output removed on failure. These are processing limits, not a promise that total resident RAM always stays below 1 GB. No persistent extra service is introduced.
+Only one probe/export/preview conversion job runs at a time. Probe timeout is 10 seconds; export timeout and CPU limit are 10 minutes. Each tool has a sampled 384 MiB resident-memory guard (PSS when available, RSS fallback), a 1 GiB output-file limit, disabled core dumps, and bounded captured diagnostic output. The monitor checks about every 100 ms and terminates only the processing child on excess; transient growth between samples is possible. This replaces the 2 GiB virtual-address cap, which could reject legitimate FFmpeg library mappings. Fast trim copies streams; frame-accurate trim uses two encoding threads and low-latency settings. The original is preserved and incomplete output removed on failure. These are processing limits, not a promise that total resident RAM always stays below 1 GB. No persistent extra service is introduced.
 
 The Tauri capability grants only event listen/unlisten and the enumerated application commands to the local main window. External page navigation is denied. CSP restricts scripts to the bundled app and disables objects, base URLs, form submissions, and framing. The development server binds only to loopback.
 
@@ -47,8 +47,14 @@ Cloud tests use a simulated recorder. Actual NVIDIA/Wayland capture, privileged 
 
 Use the repository's private vulnerability reporting feature for sensitive findings when available. Do not attach personal clips, credentials, or private signing material to public issues.
 
-## Login startup in 0.1.8
+## Login startup in 0.1.9
 
 Login startup is opt-in. The app writes only its owned XDG login entry and, for standalone Hyprland sessions, a marked startup block in an existing standard config. A user-owned config symlink is resolved to its existing target while preserving the symlink. Files must be regular, owned by the current user, bounded in size and not hard linked. Writes are atomic; multi-file changes roll back earlier changes if a later write fails. A foreign login entry using the same filename is preserved and reported. Disabling removes the app's registration and preserves foreign config content. The fixed autostart command uses the current executable; no arbitrary command comes from the frontend. No system/root service is installed.
 
 Managed graphical sessions use the XDG entry and a systemd user daemon-reload to refresh autostart generation. Hidden and visible login launches share the existing single-instance backend. Stale login requests exit when startup is disabled, and duplicate login requests do not force a hidden window open.
+
+## Playback, deletion and window actions in 0.1.9
+
+Compatible previews use the same descriptor-based, network-restricted FFmpeg processing as exports, with a dedicated private cache, a 64 MiB output cap, a 180-second timeout and a cancellation generation checked by the child monitor. Preview files are served only through the existing secret-token/Host/Origin-protected loopback server, with the correct WebM MIME type and byte ranges. CORS headers are returned only for already-allowed app origins. Closing the editor cancels conversion and removes its completed cache file; old preview leftovers are cleared on startup. Original clip bytes remain unchanged.
+
+Delete accepts a validated library filename, verifies a regular non-symlink file and unlinks it relative to the opened library directory. The UI confirms the filename before permanent deletion; Cancel does not call the native delete command. External opening accepts only an existing validated library clip and invokes xdg-open without a shell. The window command uses a fixed action enum and targets only the app's own main window; broad window or filesystem permissions are not granted. Playback diagnostic input is bounded before logging.

@@ -174,7 +174,14 @@ fn bounded_read(mut stream: impl Read, limit: usize) -> Vec<u8> {
     }
     data
 }
-pub fn run(mut command: Command, timeout: Duration) -> Result<Vec<u8>, String> {
+pub fn run(command: Command, timeout: Duration) -> Result<Vec<u8>, String> {
+    run_cancellable(command, timeout, || false)
+}
+pub fn run_cancellable(
+    mut command: Command,
+    timeout: Duration,
+    cancelled: impl Fn() -> bool,
+) -> Result<Vec<u8>, String> {
     let mut child = command
         .spawn()
         .map_err(|e| format!("Cannot start secure video processing: {e}"))?;
@@ -186,6 +193,14 @@ pub fn run(mut command: Command, timeout: Duration) -> Result<Vec<u8>, String> {
     let deadline = Instant::now() + timeout;
     let mut memory_check = Instant::now();
     let status = loop {
+        if cancelled() {
+            unsafe {
+                libc::kill(-(child.id() as i32), libc::SIGKILL);
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+            break Err("Preview cancelled".into());
+        }
         if memory_check.elapsed() >= Duration::from_millis(100) {
             memory_check = Instant::now();
             if resident_bytes(child.id()).is_some_and(|bytes| bytes > 384 * 1024 * 1024) {

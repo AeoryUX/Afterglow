@@ -1,4 +1,4 @@
-# Afterglow 0.1.8 alpha
+# Afterglow 0.1.9 alpha
 
 A local gameplay clipping app for Linux, targeting CachyOS + Hyprland + Caelestia. The current capture support requires a working NVIDIA driver. Afterglow uses GPU Screen Recorder for capture and FFmpeg for edits.
 
@@ -26,7 +26,7 @@ This uses the project's signed pacman repository. An AUR account is not needed. 
 
 The setup pins publisher fingerprint `0BD7BEF64831B7CD5EA167C5952EE3DFB307F111`, verifies the repository signature, imports and locally trusts that key, adds `/etc/pacman.d/afterglow.conf`, and syncs only this repository. Package and database signatures are required. Keep your normal Arch/CachyOS system upgrades current.
 
-The package pulls in GPU Screen Recorder, FFmpeg, PipeWire audio tools, GTK3/WebKitGTK, Ayatana tray support, playback plugins, xdg-utils, and NVIDIA user-space tools. Your existing NVIDIA kernel driver must already work with your CachyOS kernel. The package does not select a kernel module. This build targets current Linux x86_64 with glibc >= 2.39.
+The package pulls in GPU Screen Recorder, FFmpeg, PipeWire audio tools, GTK3/WebKitGTK, Ayatana tray support, playback/parser plugins, xdg-utils, and NVIDIA user-space tools. Your existing NVIDIA kernel driver must already work with your CachyOS kernel. The package does not select a kernel module. This build targets current Linux x86_64 with glibc >= 2.39.
 
 ## Home, library, and desktop controls
 
@@ -54,11 +54,15 @@ Login setup writes an owned XDG autostart entry under `$XDG_CONFIG_HOME/autostar
 
 A persistent capture worker keeps replay independent of the GUI and idle background task pools. Closing the window now keeps Afterglow in the tray by default, with the library web process released to save RAM. Replay and configured shortcuts keep working. The white monochrome tray menu offers Open Afterglow, Start replay, Save replay, Stop replay and Quit Afterglow. Reopen through the tray, shortcut, or app launcher. **Quit Afterglow** fully exits and stops capture. **Settings → Appearance & behavior** controls close-to-tray, replay on app startup, start-in-tray, and Caelestia/light/dark appearance. Replay must be active to save clips. The manual tray preference and desktop-login window preference are separate.
 
-The clip library supports search, playback, rename, open-folder, and exporting a trimmed copy while preserving the original. **Fast** trim copies the encoded streams, keeping quality and using little processing memory; cuts can include extra time near a keyframe. Choose **Frame-accurate** for an exact cut using CPU encoding. Preview is unloaded during export. If export fails, the editor retains your range and displays the error so you can retry.
+Each clip has **Play**, **Edit**, **Open externally**, and **Delete** actions. Delete asks for confirmation and permanently removes only the selected file. The player has explicit play/pause, ±5 seconds, seek, mute and volume controls, retry, and external opening. App window controls provide minimize to tray, maximize/restore and close; close follows the tray preference.
+
+Preview playback uses software video presentation and prefers software H.264 decoding in WebKit. The package includes the H.264 parser plugin from gst-plugins-bad-libs. If WebKit reports an unsupported/decode failure, Afterglow prepares a private temporary VP8/Opus preview, up to 720p30. **Compatible preview** can also be selected manually. The original MP4 is kept unchanged and remains the source for edits. Conversion is limited to 64 MiB output, 180 seconds and the existing sampled processing RAM guard, and cancels when the editor closes. The temporary preview is removed when closed and stale preview files are cleared on startup. Failure details remain visible in the player and recent playback diagnostics appear in `afterglow --doctor`.
+
+The clip library also supports search, sort, rename, open-folder, and exporting a trimmed copy while preserving the original. **Fast** trim copies the encoded streams, keeping quality and using little processing memory; cuts can include extra time near a keyframe. Choose **Frame-accurate** for an exact cut using CPU encoding. Preview is unloaded during export. If export fails, the editor retains your range and displays the error so you can retry.
 
 ## Validation and limits
 
-Thirty-seven backend tests and native UI/playback/trim/theme/background tests passed with a simulated recorder. One packaged test measured approximately 437 MB with the library open and 247 MB in the tray while the fixture held a resident 90 MB buffer. These figures are not a GTX 1660 Super recording benchmark or a universal RAM ceiling. Real NVIDIA/Wayland capture, permissions, audio sync, and game performance still require hardware testing.
+Thirty-eight backend tests and native UI/playback/trim/theme/background tests passed with a simulated recorder. An earlier 0.1.8 packaged test measured approximately 437 MB with the library open and 247 MB in the tray while the fixture held a resident 90 MB buffer. These figures are not a GTX 1660 Super recording benchmark or a universal RAM ceiling. Real NVIDIA/Wayland capture, permissions, audio sync, and game performance still require hardware testing.
 
 The RAM target is below 1 GB, with a bounded encoded replay buffer, paused preview during export, and a sampled 384 MiB processing memory guard. High memory no longer automatically closes the window. Use **Game mode** or close to tray to release the library web process while recording continues. GPU VRAM, all filesystem cache, and external shared desktop/kernel allocations are outside that readout. See VALIDATION.md and PACKAGING-VALIDATION.md for the test boundaries.
 
@@ -72,7 +76,7 @@ The security protections introduced in 0.1.3 include private clip/log directorie
 
 Version 0.1.2 fixed a package bug that made the system desktop entry readable only by root. Existing installations can update with `paru -Syu afterglow-bin` or `yay -Syu afterglow-bin`. Close and reopen the launcher after updating. If it is still missing, run `afterglow --doctor` to inspect launcher paths, permissions, and a possible user override. Do not run the app with sudo.
 
-After upgrading, choose **Quit Afterglow** in the tray and reopen; closing the window keeps the old backend alive. Verify `afterglow --version` shows 0.1.8. Read Settings → Diagnostics → Capture log after a failed start or export. `afterglow --doctor` now includes recorder/FFmpeg/driver details and recent app/capture logs. Capture failures are also shown beside the replay controls. Check `nvidia-smi`, `gpu-screen-recorder --info`, and `gpu-screen-recorder --list-capture-options`. Follow the recorder package's KMS permission instructions and run Afterglow as your normal user. A clip must finish writing before FFprobe can read it for trimming.
+After upgrading, choose **Quit Afterglow** in the tray and reopen; closing the window keeps the old backend alive. Verify `afterglow --version` shows 0.1.9. Read Settings → Diagnostics → Capture log after a failed start or export. `afterglow --doctor` now includes recorder/FFmpeg/driver details and recent app/capture logs. Capture failures are also shown beside the replay controls. Check `nvidia-smi`, `gpu-screen-recorder --info`, and `gpu-screen-recorder --list-capture-options`. Follow the recorder package's KMS permission instructions and run Afterglow as your normal user. A clip must finish writing before FFprobe can read it for trimming.
 
 ## Build from source
 
@@ -88,7 +92,7 @@ Build a native executable with `npm run tauri build -- --no-bundle`. Run backend
 
 ## Source, packages, and license
 
-Application source is in this branch. Signed package files are in the [packages branch](https://github.com/AeoryUX/Afterglow/tree/packages); versioned native archives and corresponding source are under its `releases/` directory. See the [0.1.8 release](https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.8) and [repository information](https://github.com/AeoryUX/Afterglow/releases/tag/arch-repository).
+Application source is in this branch. Signed package files are in the [packages branch](https://github.com/AeoryUX/Afterglow/tree/packages); versioned native archives and corresponding source are under its `releases/` directory. See the [0.1.9 release](https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.9) and [repository information](https://github.com/AeoryUX/Afterglow/releases/tag/arch-repository).
 
 Afterglow's original code is GPL-3.0-only. See COPYING and LICENSE.md. Dependencies keep their respective licenses; notices are included in THIRD_PARTY_NOTICES.txt and package distributions.
 

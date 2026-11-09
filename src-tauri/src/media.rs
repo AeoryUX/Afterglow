@@ -49,7 +49,7 @@ pub fn byte_range(value: Option<&str>, size: u64) -> Result<(u64, u64, bool), ()
     Ok((start, end, true))
 }
 impl MediaServer {
-    pub fn start(root: PathBuf) -> Result<Self, String> {
+    pub fn start(root: PathBuf, cache: PathBuf) -> Result<Self, String> {
         let server = Server::http("127.0.0.1:0").map_err(|e| e.to_string())?;
         let address = server
             .server_addr()
@@ -71,15 +71,19 @@ impl MediaServer {
                     continue;
                 }
                 let root = root.clone();
+                let cache = cache.clone();
                 let token = token.clone();
                 let limit = limit.clone();
                 std::thread::spawn(move || {
-                    serve(request, &root, &token, &address.to_string());
+                    serve(request, &root, &cache, &token, &address.to_string());
                     limit.fetch_sub(1, Ordering::SeqCst);
                 });
             }
         });
         Ok(Self { prefix })
+    }
+    pub fn preview_url(&self) -> String {
+        format!("{}preview.webm", self.prefix)
     }
     pub fn url(&self, name: &str) -> String {
         format!(
@@ -89,7 +93,13 @@ impl MediaServer {
         )
     }
 }
-fn serve(request: tiny_http::Request, root: &std::path::Path, token: &str, address: &str) {
+fn serve(
+    request: tiny_http::Request,
+    root: &std::path::Path,
+    cache: &std::path::Path,
+    token: &str,
+    address: &str,
+) {
     let hosts = request
         .headers()
         .iter()
@@ -130,7 +140,15 @@ fn serve(request: tiny_http::Request, root: &std::path::Path, token: &str, addre
         let _ = request.respond(Response::empty(404));
         return;
     };
-    let Ok(mut file) = crate::clips::open_clip(root, &name) else {
+    let preview = name == "preview.webm";
+    let source = if preview {
+        crate::private_fs::Directory::open(cache)
+            .and_then(|dir| dir.read("preview.webm"))
+            .map_err(|e| e.to_string())
+    } else {
+        crate::clips::open_clip(root, &name)
+    };
+    let Ok(mut file) = source else {
         let _ = request.respond(Response::empty(404));
         return;
     };
@@ -156,12 +174,19 @@ fn serve(request: tiny_http::Request, root: &std::path::Path, token: &str, addre
     }
     let length = end - start + 1;
     let mut headers = vec![
-        header("Content-Type", "video/mp4"),
+        header(
+            "Content-Type",
+            if preview { "video/webm" } else { "video/mp4" },
+        ),
         header("Accept-Ranges", "bytes"),
         header("Cache-Control", "no-store"),
         header("X-Content-Type-Options", "nosniff"),
         header("Cross-Origin-Resource-Policy", "cross-origin"),
     ];
+    if let Some(origin) = origins.first() {
+        headers.push(header("Access-Control-Allow-Origin", origin.value.as_str()));
+        headers.push(header("Vary", "Origin"));
+    }
     if partial {
         headers.push(header(
             "Content-Range",
@@ -220,7 +245,7 @@ mod tests {
         ));
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("A play.mp4"), b"0123456789").unwrap();
-        let server = MediaServer::start(root.clone()).unwrap();
+        let server = MediaServer::start(root.clone(), root.join("cache")).unwrap();
         let request = |url: &str, range: &str| {
             let (address, path) = url
                 .strip_prefix("http://")
@@ -251,6 +276,15 @@ mod tests {
         );
         std::os::unix::fs::symlink("/etc/passwd", root.join("link.mp4")).unwrap();
         assert!(request(&server.url("link.mp4"), "").starts_with("HTTP/1.1 404"));
+        fs::create_dir(root.join("cache")).unwrap();
+        fs::write(root.join("cache/preview.webm"), b"webm-preview").unwrap();
+        let preview = request(
+            &server.preview_url(),
+            "Origin: tauri://localhost\r\nRange: bytes=0-3\r\n",
+        );
+        assert!(preview.starts_with("HTTP/1.1 206"));
+        assert!(preview.contains("video/webm"));
+        assert!(preview.ends_with("webm"));
         let result = request(&server.url("A play.mp4"), "Range: bytes=2-5\r\n");
         assert!(result.starts_with("HTTP/1.1 206"));
         assert!(result.ends_with("2345"));
