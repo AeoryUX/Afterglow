@@ -1,0 +1,19 @@
+{
+  "targetBytes": 1000000000,
+  "uiRecording": {
+    "bytes": 437886976,
+    "processes": 4,
+    "recorderBytes": 96783360
+  },
+  "gameModeRecording": {
+    "bytes": 247390208,
+    "processes": 3,
+    "recorderBytes": 96785408
+  },
+  "savedWhileInGameMode": true,
+  "closeButtonKeepsRecording": true,
+  "backgroundIdleSeconds": 20,
+  "configuredHotkeySaveFromTray": true,
+  "liveCaelestiaSync": true,
+  "testBoundary": "Simulated recorder with a real resident 90 MB buffer; no NVIDIA GPU or Hyprland capture in this environment."
+}

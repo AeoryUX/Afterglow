@@ -26,3 +26,5 @@ Version 0.1.2 fixes launcher file permissions and Caelestia theme/update handlin
 Version 0.1.3 adds private files, restricted video processing, tighter native permissions, safer save signaling and a backported GLib fix. See https://github.com/AeoryUX/Afterglow/blob/main/SECURITY.md for protections and remaining boundaries.
 
 Version 0.1.4 adds Settings tabs and an easy Hyprland keybind editor, total clip-library storage budgets, session/resolution/cursor controls, and a white tray icon. Closing keeps replay alive by default. Use Quit Afterglow in the tray, then reopen after upgrading. Details: https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.4
+
+Version 0.1.5 starts replay automatically, makes fast trimming the default, preserves the editor after failed exports, and keeps memory pressure from closing the window. Capture failures and export diagnostics are visible. Update with `paru -Syu afterglow-bin`, choose Quit Afterglow in the tray, then reopen. Details: https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.5
