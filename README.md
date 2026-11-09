@@ -32,3 +32,6 @@ Version 0.1.5 starts replay automatically, makes fast trimming the default, pres
 Version 0.1.6 adds shortcut dropdowns, fixes WebKit key capture, keeps capture controls usable after library errors, and repairs saved X11/Wayland settings that conflict with the current desktop. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.6
 
 Version 0.1.7 separates Home and the clip library, highlights active Keybinds, adds a saved-clip sound with mute, supports single keys including F2 and slash, and refreshes the interface with Caelestia surfaces and glowing switches. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.7
+
+
+Version 0.1.8 adds desktop login startup and a window option, more built-in themes, automatic shortcut selection and Home sync, and compatibility with Hyprland 0.57.1 Lua bindings. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.8
