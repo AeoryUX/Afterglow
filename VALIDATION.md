@@ -64,7 +64,7 @@ Native WebKit checks verify unmodified F2 and slash through a Hyprland IPC fixtu
 
 37 backend tests and six JavaScript tests passed. New tests cover owned login registration/removal, marked Lua/Hyprlang hooks, idempotency, foreign-file preservation, Lua binding generation and ownership, and complete theme palettes. The new login options default off; existing preferences migrate without enabling login startup.
 
-Browser tests cover automatic key application, captured-key dropdown selection, Home shortcut sync, inline conflict errors, retry, rapid edits and cancellation after removing bindings. They also cover dependency of the login window switch on login startup, saved theme choices and the existing clip/export/storage/keyboard/responsive flows.
+Browser tests cover automatic key application, captured-key dropdown selection, Home shortcut sync, inline conflict errors, retry, rapid edits and cancellation after removing bindings. Automatic completion is also checked not to discard an open clip editor or unsaved Settings form. They also cover dependency of the login window switch on login startup, saved theme choices and the existing clip/export/storage/keyboard/responsive flows.
 
 Native WebKit tests use the compiled UI and real Rust IPC. The Lua-mode hyprctl fixture reports unknown request for legacy keyword commands and executes generated Lua with the host Lua 5.4 interpreter against a modeled hl binding API. Tests verify idempotency, rebinding, ownership markers, slash/F-key conflicts, confirmed sound routing, clip export and background recording. A second fixture mode exercises the legacy keyword API. API names and behavior were checked against the Hyprland v0.57.1 source, matching the user's version. No real compositor was available.
 

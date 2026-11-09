@@ -76,7 +76,7 @@ async function applyShortcutDraft(notify){
   if(version===shortcutEditVersion)shortcutDraft=structuredClone(prefs.shortcuts);
   if(!native)localStorage.setItem('afterglow-desktop-preferences',JSON.stringify(prefs));
   state.shortcutStatus=native?'Shortcuts active in Hyprland, including from the tray.':'Preview updated. Apply shortcuts in the desktop app.';
-  if(!shortcutRecording)render();else updateCaptureStatus();if(notify)toast('Shortcuts applied.');
+  if(!shortcutRecording&&!document.querySelector('#player')?.open&&(page!=='setup'||settingsTab==='keybinds'))render();else updateCaptureStatus();if(notify)toast('Shortcuts applied.');
  }catch(error){shortcutError=String(error);state.shortcutStatus='Could not apply changes. Review the error and retry.';updateCaptureStatus();if(notify)toast(shortcutError,true);}
  finally{shortcutSaving=false;if(shortcutQueued){clearTimeout(shortcutTimer);shortcutTimer=setTimeout(()=>applyShortcutDraft(false),100);}}
 }
@@ -142,6 +142,7 @@ function applyTheme(){
 function updateMemory(){const el=document.querySelector('#ram-value');if(el){el.textContent=state.memory?.bytes?`${state.memory.approximate?'~ ':''}${bytes(state.memory.bytes)}`:'—';el.classList.toggle('ram-warning',(state.memory?.bytes||0)>=750000000);el.title='Estimated memory across Afterglow, playback processes, and its recorder. Shared memory is apportioned when available.';}}
 function updateCaptureStatus(){
  const capture=state.running?(state.activeSettings||settings):settings;
+ const saveKey=document.querySelector('#save kbd');if(saveKey)saveKey.textContent=shortcutLabel(prefs.shortcuts.save);
  const tag=document.querySelector('.status-tag');if(tag){
  tag.classList.toggle('live',state.running);tag.innerHTML=`<span class="green-dot"></span>${state.starting?'STARTING REPLAY':state.captureError?'CAPTURE NEEDS ATTENTION':state.running?'REPLAY IS ACTIVE':'REPLAY IS OFF'}`;
  document.querySelector('#toggle span').textContent=state.starting?'Starting…':state.running?'Stop replay':'Start replay';document.querySelector('#toggle').disabled=!native||busy||state.starting;

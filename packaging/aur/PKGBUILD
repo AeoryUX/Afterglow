@@ -12,7 +12,7 @@ provides=('afterglow')
 conflicts=('afterglow')
 options=('!strip' '!debug')
 source=("afterglow-${pkgver}-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v${pkgver}-packages/releases/v${pkgver}/afterglow-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('8f916717f83fd35a91b14d9b998a52fc8a2828c8576f4745959916ccded57b90')
+sha256sums=('9325d9eb4e0ed6a4ea87e16c9ec1aff0561ea19dc675e1a361ceffc193a67b0c')
 
 package() {
     local release="$srcdir/afterglow-${pkgver}-linux-x86_64"
