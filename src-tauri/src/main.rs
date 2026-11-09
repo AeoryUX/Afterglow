@@ -9,6 +9,7 @@ mod memory;
 mod preferences;
 mod private_fs;
 mod processing;
+mod sound;
 mod storage;
 mod system;
 mod theme;
@@ -502,6 +503,15 @@ fn spawn_capture(
                         .0
                         .store(false, Ordering::SeqCst);
                     let _ = handle.emit("clip-saved", line);
+                    if handle
+                        .state::<preferences::PreferencesState>()
+                        .0
+                        .lock()
+                        .map(|p| p.clip_sound)
+                        .unwrap_or(false)
+                    {
+                        sound::play(handle.clone());
+                    }
                 }
             }
         });

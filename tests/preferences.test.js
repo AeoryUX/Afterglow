@@ -13,6 +13,8 @@ test('valid preferences survive while oversized legacy buffers are bounded', () 
   assert.deepEqual(normalizeSettings({...saved,seconds:30}), {...saved,seconds:30,session:'auto',resolution:'native',showCursor:true});
 });
 
-test('shortcut recorder accepts modifiers and valid keys without global side effects',()=>{assert.equal(shortcutFromEvent({code:'KeyS'}),null);const shortcut=shortcutFromEvent({code:'KeyS',ctrlKey:true,shiftKey:true});assert.deepEqual(shortcut,{modifiers:['CTRL','SHIFT'],key:'S'});assert.equal(shortcutLabel(shortcut),'Ctrl + Shift + S');assert.equal(defaultDesktopPreferences().shortcuts.enabled,false);assert.equal(defaultDesktopPreferences().closeToTray,true);});
+test('shortcut recorder accepts modifiers and valid keys without global side effects',()=>{assert.deepEqual(shortcutFromEvent({code:'KeyS'}),{modifiers:[],key:'S'});const shortcut=shortcutFromEvent({code:'KeyS',ctrlKey:true,shiftKey:true});assert.deepEqual(shortcut,{modifiers:['CTRL','SHIFT'],key:'S'});assert.equal(shortcutLabel(shortcut),'Ctrl + Shift + S');assert.equal(defaultDesktopPreferences().shortcuts.enabled,false);assert.equal(defaultDesktopPreferences().closeToTray,true);});
 
 test('WebKit key capture falls back when code is absent or unidentified',()=>{assert.deepEqual(shortcutFromEvent({key:'f8',ctrlKey:true}),null);assert.deepEqual(shortcutFromEvent({key:'F8',ctrlKey:true}),{modifiers:['CTRL'],key:'F8'});assert.deepEqual(shortcutFromEvent({code:'Unidentified',key:'s',altKey:true}),{modifiers:['ALT'],key:'S'});});
+
+test('single function keys and slash keep no modifier',()=>{assert.deepEqual(shortcutFromEvent({code:'F2'}),{modifiers:[],key:'F2'});assert.deepEqual(shortcutFromEvent({code:'Slash',key:'/'}),{modifiers:[],key:'slash'});assert.deepEqual(shortcutFromEvent({key:'/'}),{modifiers:[],key:'slash'});assert.equal(shortcutFromEvent({key:'Control'}),null);assert.equal(shortcutLabel({modifiers:[],key:'slash'}),'/');});

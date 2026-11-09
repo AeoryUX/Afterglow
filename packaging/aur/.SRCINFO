@@ -1,6 +1,6 @@
 pkgbase = afterglow-bin
-	pkgdesc = NVIDIA-first instant replay and local gameplay clips for Linux
-	pkgver = 0.1.6
+	pkgdesc = Instant replay and local gameplay clips for Linux
+	pkgver = 0.1.7
 	pkgrel = 1
 	url = https://github.com/AeoryUX/Afterglow
 	arch = x86_64
@@ -11,6 +11,7 @@ pkgbase = afterglow-bin
 	depends = webkit2gtk-4.1
 	depends = libayatana-appindicator
 	depends = ffmpeg
+	depends = pipewire-audio
 	depends = gst-libav
 	depends = gst-plugins-good
 	depends = xdg-utils
@@ -21,7 +22,7 @@ pkgbase = afterglow-bin
 	conflicts = afterglow
 	options = !strip
 	options = !debug
-	source = afterglow-0.1.6-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v0.1.6-packages/releases/v0.1.6/afterglow-0.1.6-linux-x86_64.tar.gz
-	sha256sums = 288b33b29d6f0fb92a382fc5a8d50f935e3e716cc73fe2133152f516384d77aa
+	source = afterglow-0.1.7-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v0.1.7-packages/releases/v0.1.7/afterglow-0.1.7-linux-x86_64.tar.gz
+	sha256sums = 98d236e7b3cf42c4d8ec6e63c33f145829beb9735a6a54024de7ec54e94f53f0
 
 pkgname = afterglow-bin

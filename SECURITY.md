@@ -1,6 +1,6 @@
 # Afterglow security
 
-Version 0.1.6 retains the 0.1.3 protections and adds an owner-only local control channel for background save/toggle/show actions. The socket is mode 0600 inside a private runtime directory, and both ends validate SO_PEERCRED. New saves use the same storage-budget checks from the UI, tray and shortcuts. Legacy --save-replay pidfd fallback remains available for an older running version.
+Version 0.1.7 retains the 0.1.3 protections and adds an owner-only local control channel for background save/toggle/show actions. The socket is mode 0600 inside a private runtime directory, and both ends validate SO_PEERCRED. New saves use the same storage-budget checks from the UI, tray and shortcuts. Legacy --save-replay pidfd fallback remains available for an older running version.
 
 Preferences are stored atomically as mode 0600 in the app configuration directory. Shortcut inputs are validated against allowed modifiers and key names; the launched command is the shell-quoted current executable with a fixed action flag. Hyprland bindings are checked for collisions and its configuration files are not modified. No general shell-execution API is exposed to the frontend.
 

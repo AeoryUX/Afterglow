@@ -19,12 +19,21 @@ pub fn mask(s: &Shortcut) -> u64 {
         })
         .fold(0, |a, b| a | b)
 }
+fn canonical_key(k: &str) -> &str {
+    if k == "/" {
+        "slash"
+    } else {
+        k
+    }
+}
 fn valid_key(k: &str) -> bool {
     (k.len() == 1 && k.bytes().all(|c| c.is_ascii_alphanumeric()))
         || k.strip_prefix('F')
             .and_then(|s| s.parse::<u8>().ok())
             .is_some_and(|n| (1..=24).contains(&n))
         || [
+            "slash",
+            "/",
             "space",
             "Return",
             "Tab",
@@ -47,7 +56,6 @@ pub fn validate(s: &Shortcuts) -> Result<(), String> {
     let keys = [&s.save, &s.toggle, &s.show];
     for key in keys {
         if !valid_key(&key.key)
-            || key.modifiers.is_empty()
             || key.modifiers.len() > 4
             || key
                 .modifiers
@@ -55,7 +63,7 @@ pub fn validate(s: &Shortcuts) -> Result<(), String> {
                 .any(|m| !["SUPER", "CTRL", "ALT", "SHIFT"].contains(&m.as_str()))
         {
             return Err(
-                "Choose a letter, number, F1–F24 or navigation key with Super, Ctrl, Alt or Shift"
+                "Choose a letter, number, F1–F24, slash or navigation key, optionally with a modifier"
                     .into(),
             );
         }
@@ -70,10 +78,10 @@ pub fn validate(s: &Shortcuts) -> Result<(), String> {
     Ok(())
 }
 fn same(a: &Shortcut, b: &Shortcut) -> bool {
-    mask(a) == mask(b) && a.key.eq_ignore_ascii_case(&b.key)
+    mask(a) == mask(b) && canonical_key(&a.key).eq_ignore_ascii_case(canonical_key(&b.key))
 }
 fn combo(k: &Shortcut) -> String {
-    format!("{},{}", k.modifiers.join(" "), k.key)
+    format!("{},{}", k.modifiers.join(" "), canonical_key(&k.key))
 }
 fn query() -> Result<Vec<Value>, String> {
     let out=crate::system::command("hyprctl").args(["-j","binds"]).output().map_err(|_|"Hyprland shortcut setup requires hyprctl. Use the commands below in your desktop's shortcut settings.")?;
@@ -86,7 +94,7 @@ fn matches(v: &Value, k: &Shortcut) -> bool {
     v["modmask"].as_u64() == Some(mask(k))
         && v["key"]
             .as_str()
-            .is_some_and(|s| s.eq_ignore_ascii_case(&k.key))
+            .is_some_and(|s| canonical_key(s).eq_ignore_ascii_case(canonical_key(&k.key)))
 }
 fn owned(v: &Value, command: &str, flag: &str) -> bool {
     v["dispatcher"].as_str() == Some("exec")
@@ -203,6 +211,28 @@ mod tests {
         assert!(validate(&s).is_err());
         s = Shortcuts::default();
         s.toggle = s.save.clone();
+        assert!(validate(&s).is_err());
+    }
+    #[test]
+    fn single_keys_and_slash_are_valid_and_conflicts_are_detected() {
+        let mut s = Shortcuts::default();
+        s.save = Shortcut {
+            modifiers: vec![],
+            key: "F2".into(),
+        };
+        assert!(validate(&s).is_ok());
+        assert_eq!(combo(&s.save), ",F2");
+        s.save.key = "/".into();
+        assert!(validate(&s).is_ok());
+        assert_eq!(combo(&s.save), ",slash");
+        assert!(matches(
+            &serde_json::json!({"modmask":0,"key":"slash"}),
+            &s.save
+        ));
+        s.toggle = Shortcut {
+            modifiers: vec![],
+            key: "slash".into(),
+        };
         assert!(validate(&s).is_err());
     }
     #[test]

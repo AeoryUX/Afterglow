@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Afterglow",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "identifier": "dev.afterglow.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -33,7 +33,7 @@
     "targets": [
       "appimage"
     ],
-    "shortDescription": "NVIDIA-first instant replay for Linux",
+    "shortDescription": "Instant replay for Linux",
     "category": "Video",
     "linux": {
       "appimage": {

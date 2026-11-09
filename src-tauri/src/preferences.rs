@@ -43,6 +43,7 @@ impl Default for Shortcuts {
 #[serde(rename_all = "camelCase", default)]
 pub struct Preferences {
     pub close_to_tray: bool,
+    pub clip_sound: bool,
     pub auto_start_replay: bool,
     pub startup_policy_version: u32,
     pub start_in_tray: bool,
@@ -54,6 +55,7 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             close_to_tray: true,
+            clip_sound: true,
             auto_start_replay: true,
             startup_policy_version: 1,
             start_in_tray: false,

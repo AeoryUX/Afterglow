@@ -8,7 +8,7 @@ mkdir -p "$out_dir"
 out_dir="$(cd -- "$out_dir" && pwd)"
 stage="$(mktemp -d)"
 trap 'rm -rf -- "$stage"' EXIT
-name=afterglow-0.1.6-linux-x86_64
+name=afterglow-0.1.7-linux-x86_64
 mkdir -p "$stage/$name"
 install -m755 "$release_binary" "$stage/$name/afterglow"
 install -m755 "$project_dir/scripts/afterglow-save" "$stage/$name/afterglow-save"

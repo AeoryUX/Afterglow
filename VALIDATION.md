@@ -1,16 +1,16 @@
-# Afterglow 0.1.6 alpha validation
+# Afterglow 0.1.7 alpha validation
 
 Validated on 2026-11-09 in a Linux x86_64 cloud environment. The target desktop is CachyOS + Hyprland + Caelestia + NVIDIA GTX 1660 Super.
 
 ## Passed
 
 - Vite production build and optimized, stripped Rust/Tauri release build.
-- Thirty-two optimized Rust backend/media tests, including real 1080p60 FFmpeg fast and precise trimming, original preservation, filename/path boundaries, HTTP byte ranges, capture settings, process-tree memory, and retaining/recovering a valid palette while a Caelestia scheme is partially written.
-- Four JavaScript preference/key-recorder tests: corrupt/legacy settings recover safe defaults and excessive encoded replay budgets are bounded.
+- Thirty-four optimized Rust backend/media tests, including real 1080p60 FFmpeg fast and precise trimming, original preservation, filename/path boundaries, HTTP byte ranges, capture settings, process-tree memory, and retaining/recovering a valid palette while a Caelestia scheme is partially written.
+- Five JavaScript preference/key-recorder tests: corrupt/legacy settings recover safe defaults and excessive encoded replay budgets are bounded.
 - Browser preview: capture guard, navigation, saved preferences, search, 900px/600px layouts, and no JavaScript errors.
-- Browser with a simulated native bridge: start/save/stop, rename, trim, open-folder, delayed monitor detection, forced diagnostic refresh, and live capture controls on the setup page without discarding unsaved preferences.
-- Native WebKitGTK test under Xvfb: actual compiled interface/Rust IPC, recorder start/save/stop, real MP4 duration/rename/trim/playback (readyState 4), live dark/light Caelestia schemes, partial scheme recovery, and setup controls following external replay state.
-- Game mode tears down the web process, preserves recording and saving, and relaunch restores the library. The recorder fixture held a resident 90 MB buffer. Measured tree PSS: 438,404,096 bytes with the library and 247,574,528 bytes in game mode. These are fixture results, not a hardware benchmark or a universal ceiling.
+- Browser with a simulated native bridge: start/save/stop, rename, trim, open-folder, delayed monitor detection, forced diagnostic refresh, and Home capture controls without discarding unsaved Settings drafts.
+- Native WebKitGTK test under Xvfb: actual compiled interface/Rust IPC, recorder start/save/stop, real MP4 duration/rename/trim/playback (readyState 4), live dark/light Caelestia schemes, partial scheme recovery, and separate Home/library/settings navigation.
+- Game mode tears down the web process, preserves recording and saving, and relaunch restores the library. The recorder fixture held a resident 90 MB buffer. Measured tree PSS: 433,478,656 bytes with the library and 247,548,928 bytes in game mode. These are fixture results, not a hardware benchmark or a universal ceiling.
 - Headless --version, --help, --doctor, and --save-replay; the latter signals an owned recorder and rejects negative PIDs.
 - Package regression checks under umask 077, desktop-file validation, pacman metadata, SHA-256 integrity, and package/repository signatures. See PACKAGING-VALIDATION.md.
 
@@ -48,8 +48,14 @@ Native tests use the existing bundled GTK/WebKit payload because the rootless cl
 
 Rust stable 1.99.1; Tauri 2.12.5; Vite 6.4.5. Release optimization level 1 with stripped symbols. Linux x86_64, glibc >= 2.39, GTK3/WebKitGTK 4.1. Cargo.lock and package-lock.json pin dependency resolution.
 
-## 0.1.6 controls regression
+## 0.1.7 controls regression
 
 Browser checks simulate an initial library error and confirm Start replay stays available, edit shortcuts using dropdowns, apply them through the native bridge, and retain prior export failure/retry checks. Unit tests cover missing and Unidentified KeyboardEvent.code. Native WebKit checks exercise the dropdowns, startup/failure/retry, export, and tray paths. User diagnostics identified an incompatible saved X11 session blocking startup on Wayland. The startup repair resets it to Auto, and an injected legacy X11 preference in a simulated Wayland session exercises that path. The updated UI includes recorder log details on failure.
 
 Saved X11/Wayland capture preferences that conflict with the current desktop are reset to Auto on launch. Explicit incompatible choices are disabled in the session selector; backend validation still rejects incompatible manual requests. A regression test verifies the saved-setting repair.
+
+## 0.1.7 layout, single keys, and sound
+
+Browser checks cover Home as the initial page, the library containing only clips/tools, search and sort, active sidebar states, single F2 and slash capture/application, export failure/retry, custom glowing switches with keyboard operation, mute persistence, storage controls, and 900px/600px layouts. Screenshots were inspected for the new layout.
+
+Native WebKit checks verify unmodified F2 and slash through a Hyprland IPC fixture, foreign slash-binding conflict preservation, rebinding cleanup, separate Home/library controls, saved-clip WAV delivery, mute, and sound delivery after closing to tray. PipeWire playback is replaced by a fixture that reads and checks the embedded PCM WAV. This proves routing and mute behavior, not physical speaker output. The normal package now requires pipewire-audio; the Arch package file list confirms it supplies pw-play. The self-authored tone is included under the app's GPL license. NVIDIA recording and physical audio still require target-machine checks.
