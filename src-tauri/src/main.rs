@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod activity;
+mod autostart;
 mod clips;
 mod control;
 mod hotkeys;
@@ -548,6 +549,35 @@ fn get_preferences(app: tauri::AppHandle) -> Result<preferences::Preferences, St
         .map(|p| p.clone())
         .map_err(|e| e.to_string())
 }
+fn sync_autostart(app: &tauri::AppHandle, p: &preferences::Preferences) -> Result<(), String> {
+    let config = app.path().config_dir().map_err(|e| e.to_string())?;
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let managed = system::command("systemctl")
+        .args(["--user", "is-active", "graphical-session.target"])
+        .output()
+        .is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "active");
+    let hypr = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() && !managed;
+    autostart::apply(
+        &config,
+        &exe,
+        p.start_with_system,
+        hypr,
+        hypr && hotkeys::uses_lua(),
+    )?;
+    if managed {
+        let result = system::command("systemctl")
+            .args(["--user", "daemon-reload"])
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !result.status.success() {
+            return Err(format!(
+                "Could not refresh desktop login startup: {}",
+                String::from_utf8_lossy(&result.stderr)
+            ));
+        }
+    }
+    Ok(())
+}
 #[tauri::command]
 fn save_preferences(
     app: tauri::AppHandle,
@@ -557,7 +587,20 @@ fn save_preferences(
     let mut current = state.0.lock().map_err(|e| e.to_string())?;
     // Shortcuts are changed through their explicit Apply/Remove action.
     prefs.shortcuts = current.shortcuts.clone();
-    preferences::store(&preferences_path(&app)?, &prefs)?;
+    let login_changed = prefs.start_with_system != current.start_with_system
+        || prefs.show_window_on_login != current.show_window_on_login;
+    if login_changed {
+        if let Err(e) = sync_autostart(&app, &prefs) {
+            let _ = sync_autostart(&app, &current);
+            return Err(e);
+        }
+    }
+    if let Err(e) = preferences::store(&preferences_path(&app)?, &prefs) {
+        if login_changed {
+            let _ = sync_autostart(&app, &current);
+        }
+        return Err(e);
+    }
     *current = prefs.clone();
     Ok(prefs)
 }
@@ -1122,6 +1165,10 @@ fn main() {
             let mut prefs=preferences::load(&preferences_path(app.handle()).map_err(std::io::Error::other)?).unwrap_or_else(|error|{eprintln!("{error}");preferences::Preferences::default()});
             if let Some(capture)=prefs.capture.as_mut() {if repair_saved_session(capture,&detected_session()) {activity::event(app.handle(),"Saved capture session did not match the desktop; reset to Auto");}}
             let _=preferences::store(&preferences_path(app.handle()).map_err(std::io::Error::other)?,&prefs);
+            let login=std::env::args().any(|a|a=="--autostart");
+            if login&&!prefs.start_with_system {app.handle().exit(0);return Ok(());}
+            let start_hidden=if login{!prefs.show_window_on_login}else{prefs.start_in_tray};
+            if start_hidden {if let Some(window)=app.get_webview_window("main"){let _=window.hide();}}
             app.manage(preferences::PreferencesState(Mutex::new(prefs.clone())));
             let root = output_dir(app.handle()).map_err(std::io::Error::other)?;
             app.manage(media::MediaServer::start(root).map_err(std::io::Error::other)?);
@@ -1133,11 +1180,12 @@ fn main() {
             control::start(app.handle().clone()).map_err(std::io::Error::other)?;
             refresh_hotkeys(app.handle());
             if prefs.auto_start_replay {let handle=app.handle().clone();tauri::async_runtime::spawn_blocking(move||{let _=start_saved_replay(&handle);});}
-            if prefs.start_in_tray&&!std::env::args().any(|a|a=="--show")&&app.try_state::<TrayControls>().is_some(){let handle=app.handle().clone();let _=app.run_on_main_thread(move||{let _=background_library(&handle);});}
+            if start_hidden&&!std::env::args().any(|a|a=="--show")&&app.try_state::<TrayControls>().is_some(){let handle=app.handle().clone();let _=app.run_on_main_thread(move||{let _=background_library(&handle);});}
             start_memory_monitor(app.handle().clone());
             Ok(())
         })
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+            if args.iter().any(|a|a=="--autostart") {return;}
             let _ = show_main(app);
         }))
         .manage(Recorder::default())

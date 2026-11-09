@@ -1,16 +1,16 @@
-# Afterglow 0.1.7 alpha validation
+# Afterglow 0.1.8 alpha validation
 
 Validated on 2026-11-09 in a Linux x86_64 cloud environment. The target desktop is CachyOS + Hyprland + Caelestia + NVIDIA GTX 1660 Super.
 
 ## Passed
 
 - Vite production build and optimized, stripped Rust/Tauri release build.
-- Thirty-four optimized Rust backend/media tests, including real 1080p60 FFmpeg fast and precise trimming, original preservation, filename/path boundaries, HTTP byte ranges, capture settings, process-tree memory, and retaining/recovering a valid palette while a Caelestia scheme is partially written.
-- Five JavaScript preference/key-recorder tests: corrupt/legacy settings recover safe defaults and excessive encoded replay budgets are bounded.
+- Thirty-seven optimized Rust backend/media tests, including real 1080p60 FFmpeg fast and precise trimming, original preservation, filename/path boundaries, HTTP byte ranges, capture settings, process-tree memory, and retaining/recovering a valid palette while a Caelestia scheme is partially written.
+- Six JavaScript preference/key-recorder tests: corrupt/legacy settings recover safe defaults and excessive encoded replay budgets are bounded.
 - Browser preview: capture guard, navigation, saved preferences, search, 900px/600px layouts, and no JavaScript errors.
 - Browser with a simulated native bridge: start/save/stop, rename, trim, open-folder, delayed monitor detection, forced diagnostic refresh, and Home capture controls without discarding unsaved Settings drafts.
 - Native WebKitGTK test under Xvfb: actual compiled interface/Rust IPC, recorder start/save/stop, real MP4 duration/rename/trim/playback (readyState 4), live dark/light Caelestia schemes, partial scheme recovery, and separate Home/library/settings navigation.
-- Game mode tears down the web process, preserves recording and saving, and relaunch restores the library. The recorder fixture held a resident 90 MB buffer. Measured tree PSS: 433,478,656 bytes with the library and 247,548,928 bytes in game mode. These are fixture results, not a hardware benchmark or a universal ceiling.
+- Game mode tears down the web process, preserves recording and saving, and relaunch restores the library. The recorder fixture held a resident 90 MB buffer. Measured tree PSS: 436,784,128 bytes with the library and 247,147,520 bytes in game mode. These are fixture results, not a hardware benchmark or a universal ceiling.
 - Headless --version, --help, --doctor, and --save-replay; the latter signals an owned recorder and rejects negative PIDs.
 - Package regression checks under umask 077, desktop-file validation, pacman metadata, SHA-256 integrity, and package/repository signatures. See PACKAGING-VALIDATION.md.
 
@@ -48,14 +48,24 @@ Native tests use the existing bundled GTK/WebKit payload because the rootless cl
 
 Rust stable 1.99.1; Tauri 2.12.5; Vite 6.4.5. Release optimization level 1 with stripped symbols. Linux x86_64, glibc >= 2.39, GTK3/WebKitGTK 4.1. Cargo.lock and package-lock.json pin dependency resolution.
 
-## 0.1.7 controls regression
+## 0.1.8 controls regression
 
 Browser checks simulate an initial library error and confirm Start replay stays available, edit shortcuts using dropdowns, apply them through the native bridge, and retain prior export failure/retry checks. Unit tests cover missing and Unidentified KeyboardEvent.code. Native WebKit checks exercise the dropdowns, startup/failure/retry, export, and tray paths. User diagnostics identified an incompatible saved X11 session blocking startup on Wayland. The startup repair resets it to Auto, and an injected legacy X11 preference in a simulated Wayland session exercises that path. The updated UI includes recorder log details on failure.
 
 Saved X11/Wayland capture preferences that conflict with the current desktop are reset to Auto on launch. Explicit incompatible choices are disabled in the session selector; backend validation still rejects incompatible manual requests. A regression test verifies the saved-setting repair.
 
-## 0.1.7 layout, single keys, and sound
+## 0.1.8 layout, single keys, and sound
 
 Browser checks cover Home as the initial page, the library containing only clips/tools, search and sort, active sidebar states, single F2 and slash capture/application, export failure/retry, custom glowing switches with keyboard operation, mute persistence, storage controls, and 900px/600px layouts. Screenshots were inspected for the new layout.
 
 Native WebKit checks verify unmodified F2 and slash through a Hyprland IPC fixture, foreign slash-binding conflict preservation, rebinding cleanup, separate Home/library controls, saved-clip WAV delivery, mute, and sound delivery after closing to tray. PipeWire playback is replaced by a fixture that reads and checks the embedded PCM WAV. This proves routing and mute behavior, not physical speaker output. The normal package now requires pipewire-audio; the Arch package file list confirms it supplies pw-play. The self-authored tone is included under the app's GPL license. NVIDIA recording and physical audio still require target-machine checks.
+
+## 0.1.8 login, themes and Hyprland compatibility
+
+37 backend tests and six JavaScript tests passed. New tests cover owned login registration/removal, marked Lua/Hyprlang hooks, idempotency, foreign-file preservation, Lua binding generation and ownership, and complete theme palettes. The new login options default off; existing preferences migrate without enabling login startup.
+
+Browser tests cover automatic key application, captured-key dropdown selection, Home shortcut sync, inline conflict errors, retry, rapid edits and cancellation after removing bindings. They also cover dependency of the login window switch on login startup, saved theme choices and the existing clip/export/storage/keyboard/responsive flows.
+
+Native WebKit tests use the compiled UI and real Rust IPC. The Lua-mode hyprctl fixture reports unknown request for legacy keyword commands and executes generated Lua with the host Lua 5.4 interpreter against a modeled hl binding API. Tests verify idempotency, rebinding, ownership markers, slash/F-key conflicts, confirmed sound routing, clip export and background recording. A second fixture mode exercises the legacy keyword API. API names and behavior were checked against the Hyprland v0.57.1 source, matching the user's version. No real compositor was available.
+
+Login tests validate the actual generated desktop entry, marked standalone Hyprland registration, default hidden login, visible login, duplicate request handling, disable/removal and stale-entry exit. A managed-session fixture verifies XDG registration plus systemd user daemon-reload without adding a compositor hook. These tests simulate desktop login by launching the generated command; a physical machine reboot/sign-in was not performed.

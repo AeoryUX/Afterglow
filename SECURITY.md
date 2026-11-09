@@ -1,8 +1,8 @@
 # Afterglow security
 
-Version 0.1.7 retains the 0.1.3 protections and adds an owner-only local control channel for background save/toggle/show actions. The socket is mode 0600 inside a private runtime directory, and both ends validate SO_PEERCRED. New saves use the same storage-budget checks from the UI, tray and shortcuts. Legacy --save-replay pidfd fallback remains available for an older running version.
+Version 0.1.8 retains the 0.1.3 protections and adds an owner-only local control channel for background save/toggle/show actions. The socket is mode 0600 inside a private runtime directory, and both ends validate SO_PEERCRED. New saves use the same storage-budget checks from the UI, tray and shortcuts. Legacy --save-replay pidfd fallback remains available for an older running version.
 
-Preferences are stored atomically as mode 0600 in the app configuration directory. Shortcut inputs are validated against allowed modifiers and key names; the launched command is the shell-quoted current executable with a fixed action flag. Hyprland bindings are checked for collisions and its configuration files are not modified. No general shell-execution API is exposed to the frontend.
+Preferences are stored atomically as mode 0600 in the app configuration directory. Shortcut inputs are validated against allowed modifiers and key names; the launched command is the shell-quoted current executable with a fixed action flag. Hyprland bindings are checked for collisions. Runtime binding changes use either the legacy keyword API or Lua API; Lua bindings retain their own handles so removal targets only Afterglow bindings. No general shell-execution API is exposed to the frontend.
 
 Storage capacity is a save budget, not a kernel quota. It does not delete existing clips. In-flight recorder output can finish above the budget; trimmed exports have an additional output-size limit based on remaining capacity.
 
@@ -46,3 +46,9 @@ Cloud tests use a simulated recorder. Actual NVIDIA/Wayland capture, privileged 
 ## Reporting
 
 Use the repository's private vulnerability reporting feature for sensitive findings when available. Do not attach personal clips, credentials, or private signing material to public issues.
+
+## Login startup in 0.1.8
+
+Login startup is opt-in. The app writes only its owned XDG login entry and, for standalone Hyprland sessions, a marked startup block in an existing standard config. A user-owned config symlink is resolved to its existing target while preserving the symlink. Files must be regular, owned by the current user, bounded in size and not hard linked. Writes are atomic; multi-file changes roll back earlier changes if a later write fails. A foreign login entry using the same filename is preserved and reported. Disabling removes the app's registration and preserves foreign config content. The fixed autostart command uses the current executable; no arbitrary command comes from the frontend. No system/root service is installed.
+
+Managed graphical sessions use the XDG entry and a systemd user daemon-reload to refresh autostart generation. Hidden and visible login launches share the existing single-instance backend. Stale login requests exit when startup is disabled, and duplicate login requests do not force a hidden window open.

@@ -99,12 +99,21 @@ impl Directory {
         }
         Ok(())
     }
-    pub fn remove(&self, name: &str) {
-        if let Ok(name) = Self::name(name) {
-            unsafe {
-                libc::unlinkat(self.0.as_raw_fd(), name.as_ptr(), 0);
+    pub fn remove_checked(&self, name: &str) -> io::Result<()> {
+        let name = Self::name(name)?;
+        if unsafe { libc::unlinkat(self.0.as_raw_fd(), name.as_ptr(), 0) } == 0 {
+            Ok(())
+        } else {
+            let e = io::Error::last_os_error();
+            if e.kind() == io::ErrorKind::NotFound {
+                Ok(())
+            } else {
+                Err(e)
             }
         }
+    }
+    pub fn remove(&self, name: &str) {
+        let _ = self.remove_checked(name);
     }
     pub fn atomic_write(&self, name: &str, data: &[u8]) -> io::Result<()> {
         let temporary = temporary_name("state")?;

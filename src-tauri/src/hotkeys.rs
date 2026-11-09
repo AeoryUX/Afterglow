@@ -96,25 +96,78 @@ fn matches(v: &Value, k: &Shortcut) -> bool {
             .as_str()
             .is_some_and(|s| canonical_key(s).eq_ignore_ascii_case(canonical_key(&k.key)))
 }
-fn owned(v: &Value, command: &str, flag: &str) -> bool {
-    v["dispatcher"].as_str() == Some("exec")
-        && v["arg"].as_str().is_some_and(|arg| {
-            arg == command
-                || arg == format!("afterglow {flag}")
-                || arg == format!("/usr/bin/afterglow {flag}")
-        })
+fn marker(command: &str) -> String {
+    format!("Afterglow:{}", command)
 }
-fn keyword(key: &str, value: &str) -> Result<(), String> {
+fn owned(v: &Value, command: &str, flag: &str) -> bool {
+    v["description"].as_str() == Some(marker(command).as_str())
+        || (v["dispatcher"].as_str() == Some("exec")
+            && v["arg"].as_str().is_some_and(|arg| {
+                arg == command
+                    || arg == format!("afterglow {flag}")
+                    || arg == format!("/usr/bin/afterglow {flag}")
+            }))
+}
+#[derive(Clone, Copy)]
+enum Backend {
+    Legacy,
+    Lua,
+}
+pub fn uses_lua() -> bool {
+    matches!(backend(), Backend::Lua)
+}
+fn backend() -> Backend {
+    if crate::system::command("hyprctl")
+        .args(["eval", "assert(type(hl.bind) == 'function')"])
+        .output()
+        .is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "ok")
+    {
+        Backend::Lua
+    } else {
+        Backend::Legacy
+    }
+}
+fn lua_key(k: &Shortcut) -> String {
+    let mut parts = k.modifiers.clone();
+    parts.push(canonical_key(&k.key).into());
+    parts.join(" + ")
+}
+fn lua_script(k: &Shortcut, command: Option<&str>) -> String {
+    let id = serde_json::to_string(&format!("{}:{}", mask(k), canonical_key(&k.key))).unwrap();
+    let base=format!("_G.__afterglow_desktop_bindings_v1 = _G.__afterglow_desktop_bindings_v1 or {{}}; local t = _G.__afterglow_desktop_bindings_v1; local id = {id}; if t[id] then t[id]:remove(); t[id] = nil end;");
+    if let Some(command) = command {
+        format!(
+            "{base} t[id] = hl.bind({}, hl.dsp.exec_cmd({}), {{description = {}}});",
+            serde_json::to_string(&lua_key(k)).unwrap(),
+            serde_json::to_string(command).unwrap(),
+            serde_json::to_string(&marker(command)).unwrap()
+        )
+    } else {
+        base
+    }
+}
+fn mutate(mode: Backend, k: &Shortcut, command: Option<&str>) -> Result<(), String> {
+    let args = match mode {
+        Backend::Legacy => vec![
+            "keyword".into(),
+            if command.is_some() { "bind" } else { "unbind" }.into(),
+            command
+                .map(|c| format!("{},exec,{c}", combo(k)))
+                .unwrap_or_else(|| combo(k)),
+        ],
+        Backend::Lua => vec!["eval".into(), lua_script(k, command)],
+    };
     let out = crate::system::command("hyprctl")
-        .args(["keyword", key, value])
+        .args(args)
         .output()
         .map_err(|e| e.to_string())?;
     if out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "ok" {
         Ok(())
     } else {
         Err(format!(
-            "Hyprland could not apply shortcut: {}",
-            String::from_utf8_lossy(&out.stdout).trim()
+            "Hyprland could not apply shortcut: {} {}",
+            String::from_utf8_lossy(&out.stdout).trim(),
+            String::from_utf8_lossy(&out.stderr).trim()
         ))
     }
 }
@@ -124,6 +177,7 @@ pub fn apply(state: &HotkeyState, shortcuts: &Shortcuts) -> Result<(), String> {
     if !shortcuts.enabled && installed.is_empty() {
         return Ok(());
     }
+    let mode = backend();
     let mut current = query()?;
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;
     let quoted = format!("'{}'", executable.to_string_lossy().replace('\'', "'\\''"));
@@ -161,9 +215,9 @@ pub fn apply(state: &HotkeyState, shortcuts: &Shortcuts) -> Result<(), String> {
         {
             continue;
         }
-        if let Err(error) = keyword("bind", &format!("{},exec,{}", combo(key), command)) {
+        if let Err(error) = mutate(mode, key, Some(command)) {
             for (key, _) in &added {
-                let _ = keyword("unbind", &combo(key));
+                let _ = mutate(mode, key, None);
             }
             return Err(error);
         }
@@ -179,12 +233,8 @@ pub fn apply(state: &HotkeyState, shortcuts: &Shortcuts) -> Result<(), String> {
             .iter()
             .filter(|v| matches(v, key))
             .collect::<Vec<_>>();
-        if !found.is_empty()
-            && found.iter().all(|v| {
-                v["dispatcher"].as_str() == Some("exec") && v["arg"].as_str() == Some(command)
-            })
-        {
-            keyword("unbind", &combo(key))?;
+        if !found.is_empty() && found.iter().all(|v| owned(v, command, "--unrecognized")) {
+            mutate(mode, key, None)?;
         }
     }
     // Adopt equivalent existing Afterglow bindings without duplicating them.
@@ -234,6 +284,23 @@ mod tests {
             key: "slash".into(),
         };
         assert!(validate(&s).is_err());
+    }
+    #[test]
+    fn lua_binding_uses_supported_api_and_quotes_commands() {
+        let key = Shortcut {
+            modifiers: vec![],
+            key: "/".into(),
+        };
+        let code = lua_script(&key, Some("'/usr/bin/afterglow' --save-replay"));
+        assert!(code.contains("hl.bind(\"slash\", hl.dsp.exec_cmd("));
+        assert!(code.contains("description = \"Afterglow:"));
+        assert!(lua_script(&key, None).contains(":remove()"));
+        assert!(!lua_script(&key, None).contains("hl.unbind"));
+        assert!(owned(
+            &serde_json::json!({"dispatcher":"function","arg":"42","description":marker("cmd")}),
+            "cmd",
+            "--save-replay"
+        ));
     }
     #[test]
     fn detects_foreign_bindings() {

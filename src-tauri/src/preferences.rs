@@ -43,6 +43,8 @@ impl Default for Shortcuts {
 #[serde(rename_all = "camelCase", default)]
 pub struct Preferences {
     pub close_to_tray: bool,
+    pub start_with_system: bool,
+    pub show_window_on_login: bool,
     pub clip_sound: bool,
     pub auto_start_replay: bool,
     pub startup_policy_version: u32,
@@ -55,6 +57,8 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             close_to_tray: true,
+            start_with_system: false,
+            show_window_on_login: false,
             clip_sound: true,
             auto_start_replay: true,
             startup_policy_version: 1,

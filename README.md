@@ -1,4 +1,4 @@
-# Afterglow 0.1.7 alpha
+# Afterglow 0.1.8 alpha
 
 A local gameplay clipping app for Linux, targeting CachyOS + Hyprland + Caelestia. The current capture support requires a working NVIDIA driver. Afterglow uses GPU Screen Recorder for capture and FFmpeg for edits.
 
@@ -30,7 +30,7 @@ The package pulls in GPU Screen Recorder, FFmpeg, PipeWire audio tools, GTK3/Web
 
 ## Home, library, and desktop controls
 
-**Home** opens first and contains replay controls, status, storage/RAM information and recent clips. **Clip library** is reserved for searching, sorting, previewing, renaming and trimming clips. **Keybinds** has its own active sidebar state. The interface follows Caelestia's live palette, with rounded surfaces and glowing on/off switches.
+**Home** opens first and contains replay controls, status, storage/RAM information and recent clips. **Clip library** is reserved for searching, sorting, previewing, renaming and trimming clips. **Keybinds** has its own active sidebar state. Valid key selections apply automatically and update the shortcut shown on Home. Failed changes keep an inline error and can be retried with Apply in Hyprland. The interface follows Caelestia's live palette, with rounded surfaces and glowing on/off switches. Built-in choices also include Forest dark/light, Graphite, Midnight blue, Lavender, Rose light and Sand light.
 
 A short original tone plays after a saved clip is confirmed, including from the tray. Disable **Clip saved sound** in **Settings → Appearance & behavior** to mute it. Playback uses the installed PipeWire `pw-play` command; there is no additional persistent audio process.
 
@@ -38,7 +38,7 @@ A short original tone plays after a saved clip is confirmed, including from the 
 
 Replay starts automatically when Afterglow opens, using saved capture settings (or the full display by default). The first upgrade from 0.1.4 enables this once; afterward your choice in **Settings → Appearance & behavior** is preserved. Open **Settings → Capture** to choose your monitor and restart replay to apply changes. Save a clip with **Save clip** or your configured shortcut; buffering alone does not create a library file. The default replay is 60 seconds at 12 Mbps, H.264, 60 FPS. Capture settings include Auto/Wayland/X11 session selection, native/1080p/720p resolution, cursor visibility, system audio and microphone. A session choice must match the current desktop; Xwayland inside Hyprland does not turn it into an X11 desktop.
 
-**Keybinds** is available directly in the sidebar and as a Settings tab. Use the dropdowns or press your preferred key, then choose **Apply in Hyprland**. Select **None** for a single key such as F2 or `/`. Single keys trigger globally, including while typing. Conflicting bindings are preserved. Defaults are Super+F8 to save, Super+F9 to start/stop replay, and Super+F10 to open the library. Existing named bindings are checked before changes; conflicting actions are kept. Runtime bindings are reapplied while Afterglow runs, including after compositor reloads (within about 15 seconds). No Hyprland configuration file is edited. For other desktops, the tab shows commands to assign in the desktop's shortcut settings:
+**Keybinds** is available directly in the sidebar and as a Settings tab. Use the dropdowns or press your preferred key, and changes apply automatically. Select **None** for a single key such as F2 or `/`. Single keys trigger globally, including while typing. Conflicting bindings are preserved. Defaults are Super+F8 to save, Super+F9 to start/stop replay, and Super+F10 to open the library. Existing named bindings are checked before changes; conflicting actions are kept. Runtime bindings are reapplied while Afterglow runs, including after compositor reloads (within about 15 seconds). Shortcut editing does not rewrite your Hyprland configuration. Hyprland 0.57.1 uses Lua bindings through `hyprctl eval`; older Hyprlang sessions use `keyword bind`. For other desktops, the tab shows commands to assign in the desktop's shortcut settings:
 
 ```bash
 afterglow --save-replay
@@ -48,13 +48,17 @@ afterglow --show
 
 The **Clip storage** control at the bottom-left opens **Settings → Storage**. Choose a preset, custom capacity, or unlimited storage (the default). This is a total library budget. The next save reserves estimated video/audio space and pauses when it would exceed the budget. Existing clips are kept; there is no automatic deletion. A clip already being written can finish above the budget, so this is not a filesystem quota. Exports are limited to the remaining budget and an incomplete failed export is removed while its original is preserved.
 
-A persistent capture worker keeps replay independent of the GUI and idle background task pools. Closing the window now keeps Afterglow in the tray by default, with the library web process released to save RAM. Replay and configured shortcuts keep working. The white monochrome tray menu offers Open Afterglow, Start replay, Save replay, Stop replay and Quit Afterglow. Reopen through the tray, shortcut, or app launcher. **Quit Afterglow** fully exits and stops capture. **Settings → Appearance & behavior** controls close-to-tray, replay on app startup, start-in-tray, and Caelestia/light/dark appearance. Replay must be active to save clips. App startup preferences do not add login autostart.
+**Settings → Appearance & behavior → Start with your desktop** enables login startup. **Open Afterglow window at login** chooses between a visible app window and starting quietly in the tray. The default is off for login startup; enabling it starts quietly unless the window option is also enabled. This runs after desktop sign-in, when screen capture is available. Replay still follows its separate “Start replay when Afterglow opens” setting.
+
+Login setup writes an owned XDG autostart entry under `$XDG_CONFIG_HOME/autostart/dev.afterglow.desktop.desktop`. Managed graphical sessions refresh their systemd user configuration. Standalone Hyprland sessions use a marked startup block in the existing standard `hyprland.lua` or `hyprland.conf`; disabling removes the owned entry/block while preserving user content. Custom compositor config locations need a launcher for `afterglow --autostart`. Duplicate login requests do not open a hidden window.
+
+A persistent capture worker keeps replay independent of the GUI and idle background task pools. Closing the window now keeps Afterglow in the tray by default, with the library web process released to save RAM. Replay and configured shortcuts keep working. The white monochrome tray menu offers Open Afterglow, Start replay, Save replay, Stop replay and Quit Afterglow. Reopen through the tray, shortcut, or app launcher. **Quit Afterglow** fully exits and stops capture. **Settings → Appearance & behavior** controls close-to-tray, replay on app startup, start-in-tray, and Caelestia/light/dark appearance. Replay must be active to save clips. The manual tray preference and desktop-login window preference are separate.
 
 The clip library supports search, playback, rename, open-folder, and exporting a trimmed copy while preserving the original. **Fast** trim copies the encoded streams, keeping quality and using little processing memory; cuts can include extra time near a keyframe. Choose **Frame-accurate** for an exact cut using CPU encoding. Preview is unloaded during export. If export fails, the editor retains your range and displays the error so you can retry.
 
 ## Validation and limits
 
-Thirty-four backend tests and native UI/playback/trim/theme/background tests passed with a simulated recorder. One packaged test measured approximately 433 MB with the library open and 247 MB in the tray while the fixture held a resident 90 MB buffer. These figures are not a GTX 1660 Super recording benchmark or a universal RAM ceiling. Real NVIDIA/Wayland capture, permissions, audio sync, and game performance still require hardware testing.
+Thirty-seven backend tests and native UI/playback/trim/theme/background tests passed with a simulated recorder. One packaged test measured approximately 437 MB with the library open and 247 MB in the tray while the fixture held a resident 90 MB buffer. These figures are not a GTX 1660 Super recording benchmark or a universal RAM ceiling. Real NVIDIA/Wayland capture, permissions, audio sync, and game performance still require hardware testing.
 
 The RAM target is below 1 GB, with a bounded encoded replay buffer, paused preview during export, and a sampled 384 MiB processing memory guard. High memory no longer automatically closes the window. Use **Game mode** or close to tray to release the library web process while recording continues. GPU VRAM, all filesystem cache, and external shared desktop/kernel allocations are outside that readout. See VALIDATION.md and PACKAGING-VALIDATION.md for the test boundaries.
 
@@ -68,7 +72,7 @@ The security protections introduced in 0.1.3 include private clip/log directorie
 
 Version 0.1.2 fixed a package bug that made the system desktop entry readable only by root. Existing installations can update with `paru -Syu afterglow-bin` or `yay -Syu afterglow-bin`. Close and reopen the launcher after updating. If it is still missing, run `afterglow --doctor` to inspect launcher paths, permissions, and a possible user override. Do not run the app with sudo.
 
-After upgrading, choose **Quit Afterglow** in the tray and reopen; closing the window keeps the old backend alive. Verify `afterglow --version` shows 0.1.7. Read Settings → Diagnostics → Capture log after a failed start or export. `afterglow --doctor` now includes recorder/FFmpeg/driver details and recent app/capture logs. Capture failures are also shown beside the replay controls. Check `nvidia-smi`, `gpu-screen-recorder --info`, and `gpu-screen-recorder --list-capture-options`. Follow the recorder package's KMS permission instructions and run Afterglow as your normal user. A clip must finish writing before FFprobe can read it for trimming.
+After upgrading, choose **Quit Afterglow** in the tray and reopen; closing the window keeps the old backend alive. Verify `afterglow --version` shows 0.1.8. Read Settings → Diagnostics → Capture log after a failed start or export. `afterglow --doctor` now includes recorder/FFmpeg/driver details and recent app/capture logs. Capture failures are also shown beside the replay controls. Check `nvidia-smi`, `gpu-screen-recorder --info`, and `gpu-screen-recorder --list-capture-options`. Follow the recorder package's KMS permission instructions and run Afterglow as your normal user. A clip must finish writing before FFprobe can read it for trimming.
 
 ## Build from source
 
@@ -84,7 +88,7 @@ Build a native executable with `npm run tauri build -- --no-bundle`. Run backend
 
 ## Source, packages, and license
 
-Application source is in this branch. Signed package files are in the [packages branch](https://github.com/AeoryUX/Afterglow/tree/packages); versioned native archives and corresponding source are under its `releases/` directory. See the [0.1.7 release](https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.7) and [repository information](https://github.com/AeoryUX/Afterglow/releases/tag/arch-repository).
+Application source is in this branch. Signed package files are in the [packages branch](https://github.com/AeoryUX/Afterglow/tree/packages); versioned native archives and corresponding source are under its `releases/` directory. See the [0.1.8 release](https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.8) and [repository information](https://github.com/AeoryUX/Afterglow/releases/tag/arch-repository).
 
 Afterglow's original code is GPL-3.0-only. See COPYING and LICENSE.md. Dependencies keep their respective licenses; notices are included in THIRD_PARTY_NOTICES.txt and package distributions.
 
