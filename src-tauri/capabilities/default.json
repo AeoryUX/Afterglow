@@ -17,6 +17,9 @@
     "allow-trim-clip",
     "allow-open-library",
     "allow-capture-options",
-    "allow-game-mode"
+    "allow-game-mode",
+    "allow-get-preferences",
+    "allow-save-preferences",
+    "allow-apply-shortcuts"
   ]
 }

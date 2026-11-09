@@ -13,6 +13,9 @@ fn main() {
             "open_library",
             "capture_options",
             "game_mode",
+            "get_preferences",
+            "save_preferences",
+            "apply_shortcuts",
         ]),
     ))
     .expect("Cannot build application permissions");

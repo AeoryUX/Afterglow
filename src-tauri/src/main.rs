@@ -1,10 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod clips;
+mod control;
+mod hotkeys;
 mod launcher;
 mod media;
 mod memory;
+mod preferences;
 mod private_fs;
 mod processing;
+mod storage;
 mod system;
 mod theme;
 use serde::{Deserialize, Serialize};
@@ -39,6 +43,30 @@ struct Settings {
     monitor: String,
     system_audio: bool,
     microphone: bool,
+    #[serde(default)]
+    session: String,
+    #[serde(default = "default_true")]
+    show_cursor: bool,
+    #[serde(default)]
+    resolution: String,
+}
+fn default_true() -> bool {
+    true
+}
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            bitrate: 12,
+            seconds: 60,
+            fps: 60,
+            monitor: "screen".into(),
+            system_audio: true,
+            microphone: false,
+            session: "auto".into(),
+            show_cursor: true,
+            resolution: "native".into(),
+        }
+    }
 }
 fn default_bitrate() -> u32 {
     12
@@ -63,6 +91,11 @@ struct Status {
     wayland: bool,
     output_dir: String,
     log: String,
+    session: String,
+    storage: storage::Storage,
+    preferences: preferences::Preferences,
+    shortcut_status: String,
+    background: bool,
 }
 fn output_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let p = app
@@ -76,9 +109,21 @@ fn output_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(p)
 }
 fn runtime_dir() -> Result<PathBuf, String> {
-    std::env::var_os("XDG_RUNTIME_DIR")
+    use std::os::unix::fs::MetadataExt;
+    let path = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
-        .ok_or("XDG_RUNTIME_DIR is missing; run inside your desktop session".into())
+        .ok_or("XDG_RUNTIME_DIR is missing; run inside your desktop session")?;
+    let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+    if !path.is_absolute()
+        || !metadata.is_dir()
+        || metadata.uid() != unsafe { libc::geteuid() }
+        || metadata.mode() & 0o077 != 0
+    {
+        return Err(
+            "XDG_RUNTIME_DIR must be a private directory owned by your desktop user".into(),
+        );
+    }
+    Ok(path)
 }
 fn log_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let p = app.path().app_log_dir().map_err(|e| e.to_string())?;
@@ -189,7 +234,31 @@ fn status_inner(
         &state_dir.join("caelestia/scheme.json"),
         &app.state::<theme::Cache>(),
     );
+    let preferences = app
+        .state::<preferences::PreferencesState>()
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone();
+    let settings = active
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .or_else(|| preferences.capture.clone())
+        .unwrap_or_default();
+    let storage = storage::snapshot(&output_dir(app)?, preferences.storage_limit_mb, &settings)?;
     Ok(Status {
+        background: app.state::<GameMode>().0.load(Ordering::SeqCst),
+        session: detected_session(),
+        storage,
+        preferences,
+        shortcut_status: app
+            .state::<hotkeys::HotkeyState>()
+            .message
+            .lock()
+            .map_err(|e| e.to_string())?
+            .clone(),
         tray_initialized: app.try_state::<TrayControls>().is_some(),
         stopped_intentionally: state.2.load(Ordering::SeqCst),
         memory_target_bytes: memory::RAM_TARGET,
@@ -226,6 +295,11 @@ fn capture_args(s: &Settings, output: &str) -> Result<Vec<String>, String> {
     {
         return Err("Choose a valid monitor name, such as DP-1".into());
     }
+    if !["", "auto", "wayland", "x11"].contains(&s.session.as_str())
+        || !["", "native", "1920x1080", "1280x720"].contains(&s.resolution.as_str())
+    {
+        return Err("Choose a supported session and resolution".into());
+    }
     let mut args = vec![
         "-w".into(),
         s.monitor.clone(),
@@ -244,6 +318,13 @@ fn capture_args(s: &Settings, output: &str) -> Result<Vec<String>, String> {
         "-o".into(),
         output.into(),
     ];
+    args.extend([
+        "-cursor".into(),
+        if s.show_cursor { "yes" } else { "no" }.into(),
+    ]);
+    if !s.resolution.is_empty() && s.resolution != "native" {
+        args.extend(["-s".into(), s.resolution.clone()]);
+    }
     if s.system_audio {
         args.extend(["-a".into(), "default_output".into()]);
     }
@@ -265,7 +346,54 @@ async fn start_replay(app: tauri::AppHandle, settings: Settings) -> Result<(), S
     .await
     .map_err(|e| e.to_string())?
 }
+type CaptureRequest = (Settings, std::sync::mpsc::Sender<Result<(), String>>);
+#[derive(Default)]
+struct CaptureWorker(Mutex<Option<std::sync::mpsc::SyncSender<CaptureRequest>>>);
+fn start_capture_worker(app: &tauri::AppHandle) -> Result<(), String> {
+    let (sender, receiver) = std::sync::mpsc::sync_channel::<CaptureRequest>(4);
+    let handle = app.clone();
+    std::thread::Builder::new()
+        .name("afterglow-capture".into())
+        .spawn(move || {
+            while let Ok((settings, reply)) = receiver.recv() {
+                let result = spawn_capture(
+                    &handle,
+                    handle.state::<Recorder>(),
+                    handle.state::<ActiveSettings>(),
+                    settings,
+                );
+                let _ = reply.send(result);
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    *app.state::<CaptureWorker>()
+        .0
+        .lock()
+        .map_err(|e| e.to_string())? = Some(sender);
+    Ok(())
+}
 fn start_replay_inner(
+    app: &tauri::AppHandle,
+    _state: State<Recorder>,
+    _active: State<ActiveSettings>,
+    settings: Settings,
+) -> Result<(), String> {
+    // PR_SET_PDEATHSIG follows the spawning Linux thread. Keep that thread alive
+    // across closed-window sessions instead of using a retiring async-pool worker.
+    let sender = app
+        .state::<CaptureWorker>()
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .ok_or("Capture service is not ready")?;
+    let (reply, result) = std::sync::mpsc::channel();
+    sender
+        .try_send((settings, reply))
+        .map_err(|_| "Capture service is busy; try again in a moment")?;
+    result.recv().map_err(|_| "Capture service stopped")?
+}
+fn spawn_capture(
     app: &tauri::AppHandle,
     state: State<Recorder>,
     active: State<ActiveSettings>,
@@ -278,9 +406,7 @@ fn start_replay_inner(
     if gpu().is_empty() {
         return Err("NVIDIA GPU not detected by nvidia-smi. Check your driver.".into());
     }
-    if std::env::var_os("WAYLAND_DISPLAY").is_none() {
-        return Err("This prototype targets a Wayland desktop session".into());
-    }
+    let mode = resolve_session(&settings.session, &detected_session())?;
     let args = capture_args(&settings, &output_dir(&app)?.to_string_lossy())?;
     let pid_path = runtime_dir()?.join("afterglow-recorder.pid");
     // Refuse a second app instance while its recorder is alive.
@@ -289,6 +415,13 @@ fn start_replay_inner(
             if fs::read(format!("/proc/{pid}/comm"))
                 .map(|b| b.starts_with(b"gpu-screen-reco"))
                 .unwrap_or(false)
+                && fs::read_to_string(format!("/proc/{pid}/stat"))
+                    .ok()
+                    .and_then(|v| {
+                        v.rsplit_once(") ")
+                            .map(|(_, tail)| !tail.starts_with(['Z', 'X']))
+                    })
+                    .unwrap_or(false)
             {
                 return Err("Another Afterglow recorder is running".into());
             }
@@ -299,6 +432,9 @@ fn start_replay_inner(
         .and_then(|dir| dir.private_log("capture.log"))
         .map_err(|e| e.to_string())?;
     let mut command = system::command("gpu-screen-recorder");
+    if mode == "x11" {
+        command.env_remove("WAYLAND_DISPLAY");
+    }
     command
         .args(args)
         .stdin(Stdio::null())
@@ -340,15 +476,175 @@ fn start_replay_inner(
         std::thread::spawn(move || {
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                 if line.trim().ends_with(".mp4") {
+                    handle
+                        .state::<SavePending>()
+                        .0
+                        .store(false, Ordering::SeqCst);
                     let _ = handle.emit("clip-saved", line);
                 }
             }
         });
     }
-    *active.0.lock().map_err(|e| e.to_string())? = Some(settings);
+    *active.0.lock().map_err(|e| e.to_string())? = Some(settings.clone());
+    if let Ok(mut p) = app.state::<preferences::PreferencesState>().0.lock() {
+        p.capture = Some(settings);
+        let _ = preferences::store(&preferences_path(app)?, &p);
+    }
     state.2.store(false, Ordering::SeqCst);
+    app.state::<SavePending>().0.store(false, Ordering::SeqCst);
     *slot = Some(child);
     Ok(())
+}
+#[derive(Default)]
+struct SavePending(AtomicBool, Mutex<Option<std::time::Instant>>);
+fn preferences_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|p| p.join("preferences.json"))
+        .map_err(|e| e.to_string())
+}
+#[tauri::command]
+fn get_preferences(app: tauri::AppHandle) -> Result<preferences::Preferences, String> {
+    app.state::<preferences::PreferencesState>()
+        .0
+        .lock()
+        .map(|p| p.clone())
+        .map_err(|e| e.to_string())
+}
+#[tauri::command]
+fn save_preferences(
+    app: tauri::AppHandle,
+    mut prefs: preferences::Preferences,
+) -> Result<preferences::Preferences, String> {
+    let state = app.state::<preferences::PreferencesState>();
+    let mut current = state.0.lock().map_err(|e| e.to_string())?;
+    // Shortcuts are changed through their explicit Apply/Remove action.
+    prefs.shortcuts = current.shortcuts.clone();
+    preferences::store(&preferences_path(&app)?, &prefs)?;
+    *current = prefs.clone();
+    Ok(prefs)
+}
+#[tauri::command]
+async fn apply_shortcuts(
+    app: tauri::AppHandle,
+    shortcuts: preferences::Shortcuts,
+) -> Result<preferences::Preferences, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<preferences::PreferencesState>();
+        let mut current = state.0.lock().map_err(|e| e.to_string())?;
+        hotkeys::apply(&app.state::<hotkeys::HotkeyState>(), &shortcuts)?;
+        let mut next = current.clone();
+        next.shortcuts = shortcuts;
+        preferences::store(&preferences_path(&app)?, &next)?;
+        *current = next.clone();
+        *app.state::<hotkeys::HotkeyState>()
+            .message
+            .lock()
+            .map_err(|e| e.to_string())? = if next.shortcuts.enabled {
+            "Shortcuts are active in Hyprland, including while Afterglow is in the tray."
+        } else {
+            "Afterglow shortcuts removed."
+        }
+        .into();
+        Ok(next)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+fn refresh_hotkeys(app: &tauri::AppHandle) {
+    let state = app.state::<preferences::PreferencesState>();
+    let prefs = state.0.lock().map(|p| p.clone());
+    if let Ok(prefs) = prefs {
+        if prefs.shortcuts.enabled {
+            let result = hotkeys::apply(&app.state::<hotkeys::HotkeyState>(), &prefs.shortcuts);
+            if let Ok(mut message) = app.state::<hotkeys::HotkeyState>().message.lock() {
+                *message = match result {
+                    Ok(()) => "Shortcuts active in Hyprland".into(),
+                    Err(e) => e,
+                };
+            }
+        }
+    }
+}
+fn request_save(app: &tauri::AppHandle) -> Result<(), String> {
+    let p = app
+        .state::<preferences::PreferencesState>()
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone();
+    let settings = app
+        .state::<ActiveSettings>()
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .or(p.capture)
+        .unwrap_or_default();
+    storage::guard(&output_dir(app)?, p.storage_limit_mb, &settings)?;
+    let pending = app.state::<SavePending>();
+    if pending.0.swap(true, Ordering::SeqCst) {
+        return Err("A clip is already being saved. Wait for it to finish.".into());
+    }
+    if let Err(e) = signal(&app.state::<Recorder>(), libc::SIGUSR1) {
+        pending.0.store(false, Ordering::SeqCst);
+        return Err(e);
+    }
+    *pending.1.lock().map_err(|e| e.to_string())? = Some(std::time::Instant::now());
+    Ok(())
+}
+fn toggle_replay(app: &tauri::AppHandle) -> Result<(), String> {
+    let running = {
+        let recorder = app.state::<Recorder>();
+        let mut slot = recorder.0.lock().map_err(|e| e.to_string())?;
+        is_running(&mut slot)?
+    };
+    if running {
+        signal(&app.state::<Recorder>(), libc::SIGINT)
+    } else {
+        start_saved_replay(app)
+    }
+}
+fn start_saved_replay(app: &tauri::AppHandle) -> Result<(), String> {
+    let settings = app
+        .state::<preferences::PreferencesState>()
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .capture
+        .clone()
+        .unwrap_or_default();
+    start_replay_inner(
+        app,
+        app.state::<Recorder>(),
+        app.state::<ActiveSettings>(),
+        settings,
+    )
+}
+
+fn detected_session() -> String {
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        "wayland"
+    } else if std::env::var_os("DISPLAY").is_some() {
+        "x11"
+    } else {
+        "none"
+    }
+    .into()
+}
+fn resolve_session(preferred: &str, actual: &str) -> Result<String, String> {
+    let selected = if preferred.is_empty() || preferred == "auto" {
+        actual
+    } else {
+        preferred
+    };
+    if !["wayland", "x11"].contains(&selected) {
+        return Err("Open Afterglow inside a Wayland or X11 desktop session".into());
+    }
+    if selected != actual {
+        return Err(format!("You are currently in a {actual} session. Choose Auto or {actual}; changing this setting does not switch your desktop session."));
+    }
+    Ok(selected.into())
 }
 fn signal(state: &Recorder, sig: i32) -> Result<(), String> {
     let mut slot = state.0.lock().map_err(|e| e.to_string())?;
@@ -365,8 +661,8 @@ fn signal(state: &Recorder, sig: i32) -> Result<(), String> {
     Ok(())
 }
 #[tauri::command]
-fn save_replay(state: State<Recorder>) -> Result<(), String> {
-    signal(&state, libc::SIGUSR1)
+fn save_replay(app: tauri::AppHandle) -> Result<(), String> {
+    request_save(&app)
 }
 #[tauri::command]
 async fn stop_replay(app: tauri::AppHandle) -> Result<(), String> {
@@ -419,9 +715,18 @@ async fn trim_clip(
     end: f64,
 ) -> Result<String, String> {
     let root = output_dir(&app)?;
-    tauri::async_runtime::spawn_blocking(move || clips::trim(&root, &name, start, end))
-        .await
+    let prefs = app
+        .state::<preferences::PreferencesState>()
+        .0
+        .lock()
         .map_err(|e| e.to_string())?
+        .clone();
+    let room = storage::export_room(&root, prefs.storage_limit_mb)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        clips::trim_limited(&root, &name, start, end, room)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 async fn open_library(app: tauri::AppHandle) -> Result<(), String> {
@@ -547,7 +852,6 @@ fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
 }
 #[tauri::command]
 fn game_mode(app: tauri::AppHandle) -> Result<(), String> {
-    use webkit2gtk::{WebContextExt, WebViewExt};
     let state = app.state::<Recorder>();
     {
         let mut slot = state.0.lock().map_err(|e| e.to_string())?;
@@ -555,6 +859,10 @@ fn game_mode(app: tauri::AppHandle) -> Result<(), String> {
             return Err("Start replay before entering game mode".into());
         }
     }
+    background_library(&app)
+}
+fn background_library(app: &tauri::AppHandle) -> Result<(), String> {
+    use webkit2gtk::{WebContextExt, WebViewExt};
     let window = app
         .get_webview_window("main")
         .ok_or("Library window is already closed")?;
@@ -574,6 +882,7 @@ fn game_mode(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 struct TrayControls {
+    start: tauri::menu::MenuItem<tauri::Wry>,
     save: tauri::menu::MenuItem<tauri::Wry>,
     stop: tauri::menu::MenuItem<tauri::Wry>,
 }
@@ -583,16 +892,19 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         tray::TrayIconBuilder,
     };
     let open = MenuItem::with_id(app, "open", "Open Afterglow", true, None::<&str>)?;
+    let start = MenuItem::with_id(app, "start", "Start replay", true, None::<&str>)?;
     let save = MenuItem::with_id(app, "save", "Save replay", false, None::<&str>)?;
     let stop = MenuItem::with_id(app, "stop", "Stop replay", false, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Afterglow", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &save, &stop, &quit])?;
-    let mut builder = TrayIconBuilder::with_id("afterglow")
+    let menu = Menu::with_items(app, &[&open, &start, &save, &stop, &quit])?;
+    let builder = TrayIconBuilder::with_id("afterglow")
         .menu(&menu)
-        .tooltip("Afterglow replay");
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
-    }
+        .tooltip("Afterglow · Replay idle")
+        .icon(tauri::image::Image::new(
+            include_bytes!("../icons/tray.rgba"),
+            64,
+            64,
+        ));
     builder
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open" => {
@@ -600,8 +912,14 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                     eprintln!("{e}");
                 }
             }
+            "start" => {
+                let handle = app.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let _ = start_saved_replay(&handle);
+                });
+            }
             "save" => {
-                if let Err(e) = signal(&app.state::<Recorder>(), libc::SIGUSR1) {
+                if let Err(e) = request_save(app) {
                     eprintln!("{e}");
                 }
             }
@@ -617,13 +935,27 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             _ => {}
         })
         .build(app)?;
-    app.manage(TrayControls { save, stop });
+    app.manage(TrayControls { start, save, stop });
     Ok(())
 }
 fn start_memory_monitor(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         let mut last_running = None;
+        let mut checks = 0;
         loop {
+            checks += 1;
+            if checks % 5 == 0 {
+                refresh_hotkeys(&app);
+            }
+            if let Ok(mut time) = app.state::<SavePending>().1.lock() {
+                if time
+                    .as_ref()
+                    .is_some_and(|t| t.elapsed() > std::time::Duration::from_secs(30))
+                {
+                    app.state::<SavePending>().0.store(false, Ordering::SeqCst);
+                    *time = None;
+                }
+            }
             let sample = memory::sample(std::process::id());
             let over_budget = sample.bytes >= memory::GAME_MODE_THRESHOLD;
             if let Ok(mut stored) = app.state::<MemoryState>().0.lock() {
@@ -637,7 +969,15 @@ fn start_memory_monitor(app: tauri::AppHandle) {
                 .unwrap_or(false);
             if last_running != Some(running) {
                 if let Some(controls) = app.try_state::<TrayControls>() {
+                    let _ = controls.start.set_enabled(!running);
                     let _ = controls.save.set_enabled(running);
+                    if let Some(tray) = app.tray_by_id("afterglow") {
+                        let _ = tray.set_tooltip(Some(if running {
+                            "Afterglow · Replay active"
+                        } else {
+                            "Afterglow · Replay idle"
+                        }));
+                    }
                     let _ = controls.stop.set_enabled(running);
                 }
                 last_running = Some(running);
@@ -680,8 +1020,26 @@ fn main() {
         println!("Afterglow: launch the app, or use --show, --save-replay, --doctor, --version");
         return;
     }
+    if std::env::args().skip(1).any(|arg| arg == "--toggle-replay") {
+        match control::send("toggle") {
+            Ok(message) => println!("{message}"),
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+    if std::env::args().skip(1).any(|arg| arg == "--show") && control::send("show").is_ok() {
+        return;
+    }
     if std::env::args().skip(1).any(|arg| arg == "--save-replay") {
-        if let Err(error) = save_from_cli() {
+        let result = if control::socket_path().is_ok_and(|p| p.exists()) {
+            control::send("save").map(|message| println!("{message}"))
+        } else {
+            save_from_cli()
+        };
+        if let Err(error) = result {
             eprintln!("{error}");
             std::process::exit(1);
         }
@@ -693,12 +1051,19 @@ fn main() {
             (cfg!(debug_assertions) && url.scheme()=="http" && url.host_str()==Some("localhost") && url.port()==Some(1420))
         }).build())
         .setup(|app| {
+            let prefs=preferences::load(&preferences_path(app.handle()).map_err(std::io::Error::other)?).unwrap_or_else(|error|{eprintln!("{error}");preferences::Preferences::default()});
+            app.manage(preferences::PreferencesState(Mutex::new(prefs.clone())));
             let root = output_dir(app.handle()).map_err(std::io::Error::other)?;
             app.manage(media::MediaServer::start(root).map_err(std::io::Error::other)?);
             if let Err(error)=setup_tray(app.handle()) {eprintln!("Tray initialization failed: {error}. The app remains usable; relaunch to restore the library from game mode.");}
             if let Some(window) = app.get_webview_window("main") {
                 reduce_web_cache(&window);
             }
+            start_capture_worker(app.handle()).map_err(std::io::Error::other)?;
+            control::start(app.handle().clone()).map_err(std::io::Error::other)?;
+            refresh_hotkeys(app.handle());
+            if prefs.auto_start_replay {let handle=app.handle().clone();tauri::async_runtime::spawn_blocking(move||{let _=toggle_replay(&handle);});}
+            if prefs.start_in_tray&&!std::env::args().any(|a|a=="--show")&&app.try_state::<TrayControls>().is_some(){let handle=app.handle().clone();let _=app.run_on_main_thread(move||{let _=background_library(&handle);});}
             start_memory_monitor(app.handle().clone());
             Ok(())
         })
@@ -710,6 +1075,9 @@ fn main() {
         .manage(GameMode::default())
         .manage(MemoryState::default())
         .manage(theme::Cache::default())
+        .manage(hotkeys::HotkeyState::default())
+        .manage(SavePending::default())
+        .manage(CaptureWorker::default())
         .invoke_handler(tauri::generate_handler![
             status,
             start_replay,
@@ -722,17 +1090,23 @@ fn main() {
             trim_clip,
             open_library,
             capture_options,
-            game_mode
+            game_mode, get_preferences,save_preferences,apply_shortcuts
         ])
         .build(tauri::generate_context!())
         .expect("Could not launch Afterglow")
         .run(|app, event| {
+            if let tauri::RunEvent::WindowEvent{label,event:tauri::WindowEvent::CloseRequested{api,..},..}=&event {
+                let close_to_tray=app.state::<preferences::PreferencesState>().0.lock().map(|p|p.close_to_tray).unwrap_or(false);
+                if label=="main"&&close_to_tray&&app.try_state::<TrayControls>().is_some() {api.prevent_close();let handle=app.clone();let _=app.run_on_main_thread(move||{let _=background_library(&handle);});}
+            }
             if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {
                 if code.is_none() && app.state::<GameMode>().0.load(Ordering::SeqCst) {
                     api.prevent_exit();
                 }
             }
             if let tauri::RunEvent::Exit = event {
+                control::remove();
+                if let Some(keys)=app.try_state::<hotkeys::HotkeyState>() {let _=hotkeys::apply(&keys,&preferences::Shortcuts::default());}
                 let state = app.state::<Recorder>();
                 if let Ok(mut slot) = state.0.lock() {
                     if let Some(mut child) = slot.take() {
@@ -768,6 +1142,7 @@ mod tests {
             monitor: "DP-1".into(),
             system_audio: true,
             microphone: false,
+            ..Settings::default()
         }
     }
     #[test]
@@ -786,6 +1161,14 @@ mod tests {
         assert!(initialize_security(1000).is_ok());
     }
     #[test]
+    fn session_choice_matches_the_desktop() {
+        assert_eq!(resolve_session("auto", "wayland").unwrap(), "wayland");
+        assert_eq!(resolve_session("x11", "x11").unwrap(), "x11");
+        assert!(resolve_session("x11", "wayland").is_err());
+        assert!(resolve_session("wayland", "x11").is_err());
+        assert!(resolve_session("auto", "none").is_err());
+    }
+    #[test]
     fn validates_settings() {
         let mut s = settings();
         s.seconds = 0;
@@ -797,6 +1180,13 @@ mod tests {
     #[test]
     fn uses_h264_and_audio() {
         let args = capture_args(&settings(), "/tmp/my clips").unwrap();
+        assert!(args.windows(2).any(|x| x == ["-cursor", "yes"]));
+        let mut scaled = settings();
+        scaled.resolution = "1280x720".into();
+        scaled.show_cursor = false;
+        let scaled_args = capture_args(&scaled, "out").unwrap();
+        assert!(scaled_args.windows(2).any(|x| x == ["-s", "1280x720"]));
+        assert!(scaled_args.windows(2).any(|x| x == ["-cursor", "no"]));
         assert!(args.windows(2).any(|x| x == ["-k", "h264"]));
         assert!(args.windows(2).any(|x| x == ["-a", "default_output"]));
         assert_eq!(args.iter().filter(|x| *x == "/tmp/my clips").count(), 1);

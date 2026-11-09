@@ -7,5 +7,8 @@ export function normalizeSettings(value) {
   return {seconds, bitrate, fps: pick('fps', [30, 60], 60),
     monitor: typeof saved.monitor === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(saved.monitor) ? saved.monitor : 'screen',
     systemAudio: typeof saved.systemAudio === 'boolean' ? saved.systemAudio : true,
-    microphone: typeof saved.microphone === 'boolean' ? saved.microphone : false};
+    microphone: typeof saved.microphone === 'boolean' ? saved.microphone : false,
+    session: pick('session', ['auto','wayland','x11'], 'auto'),
+    resolution: pick('resolution', ['native','1920x1080','1280x720'], 'native'),
+    showCursor: typeof saved.showCursor === 'boolean' ? saved.showCursor : true};
 }

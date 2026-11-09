@@ -115,7 +115,17 @@ pub fn validate_trim(start: f64, end: f64, length: f64) -> Result<(), String> {
     }
     Ok(())
 }
+#[cfg(test)]
 pub fn trim(root: &Path, name: &str, start: f64, end: f64) -> Result<String, String> {
+    trim_limited(root, name, start, end, None)
+}
+pub fn trim_limited(
+    root: &Path,
+    name: &str,
+    start: f64,
+    end: f64,
+    max_output_bytes: Option<u64>,
+) -> Result<String, String> {
     use std::{
         io::{Seek, SeekFrom},
         process::Stdio,
@@ -137,6 +147,22 @@ pub fn trim(root: &Path, name: &str, start: f64, end: f64) -> Result<String, Str
     let result = (|| {
         let mut command = crate::processing::command("ffmpeg", source);
         command.stdout(Stdio::from(output));
+        if let Some(limit) = max_output_bytes {
+            use std::os::unix::process::CommandExt;
+            unsafe {
+                command.pre_exec(move || {
+                    let limit = limit.min(1024 * 1024 * 1024);
+                    let cap = libc::rlimit {
+                        rlim_cur: limit,
+                        rlim_max: limit,
+                    };
+                    if libc::setrlimit(libc::RLIMIT_FSIZE, &cap) != 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+        }
         command.args([
             "-hide_banner",
             "-loglevel",
@@ -280,6 +306,14 @@ mod media_tests {
         assert_eq!(fs::read(&source).unwrap(), original);
         assert_eq!(list(&root).unwrap().len(), 2);
         assert!(trim(&root, "original.mp4", 0.0, 100.0).is_err());
+        assert!(trim_limited(&root, "original.mp4", 1.0, 2.5, Some(512)).is_err());
+        assert_eq!(fs::read(&source).unwrap(), original);
+        assert_eq!(list(&root).unwrap().len(), 2);
+        assert!(!fs::read_dir(&root).unwrap().any(|e| e
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".trim-")));
         fs::remove_dir_all(root).unwrap();
     }
 }
