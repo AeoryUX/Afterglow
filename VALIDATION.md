@@ -1,6 +1,6 @@
-# Afterglow 0.1.9 alpha validation
+# Afterglow 0.2.0 alpha validation
 
-Validated on 2026-11-09 in a Linux x86_64 cloud environment. The target desktop is CachyOS + Hyprland + Caelestia + NVIDIA GTX 1660 Super.
+Latest validation on 2026-11-10 in a Linux x86_64 cloud environment. The target desktop is CachyOS + Hyprland + Caelestia + NVIDIA GTX 1660 Super.
 
 ## Passed
 
@@ -79,3 +79,11 @@ Browser tests also verify that a failed metadata probe does not block media play
 Native WebKitGTK tests use the final compiled interface. MP4 playback advances and a canvas read verifies decoded frame pixels. A deliberately failed HTTP source triggers automatic compatible preview creation; the real generated WebM then plays with advancing time while the recorder fixture remains active and the original hash is unchanged. Closing the editor cancels an in-flight conversion and removes cache output. Native clip actions route the selected path to an external-opener fixture and confirm deletion while preserving another clip. Minimize-to-tray releases the window, keeps recording alive for 20 seconds, saves again and reopens. Close follows close-to-quit settings. The maximize command dispatches successfully, but Xvfb has no normal desktop window manager, so compositor-specific geometry is not established by this test.
 
 WebKit's software video presentation flag was checked against upstream GStreamer media code. Arch's current gst-plugins-bad-libs file list confirms it supplies libgstvideoparsersbad.so. Hardware-specific NVIDIA/Wayland behavior and the user's particular failed clip were not available for direct reproduction. External player launch and speaker output use fixtures. No test media is embedded in the distributed app.
+
+## 0.2.0 playback, closing, and folders
+
+41 optimized Rust tests and nine JavaScript tests pass. New backend tests cover folder creation/validation, persistence, clip-rename mapping, export inheritance, removal without file deletion, rollback after a failed metadata write, and preservation of corrupt metadata. HTTP tests cover authenticated opaque/alternate app origins, byte ranges/CORS, wrong-token rejection with an opaque Origin, and rejection of duplicate/foreign origins. The metadata-only player tests verify Play can request frames immediately, autoplay is not gated on future-data readiness, and closing unloads the source.
+
+Browser tests exercise folder creation, duplicate-name errors, move/filter, rename and removal that keeps clips, metadata-only Play readiness, and the absence of app-window actions inside the clip dialog. Existing real MP4/WebM playback, seek, mute/volume, fallback, settings, shortcuts, export failure/retry and responsive flows remain covered. A native compiled WebKit test verifies decoded MP4 frames, progressing MP4/WebM playback, conversion cancellation, folder creation/move, clip rename, real FFmpeg export inheritance and folder persistence across backend restart. Closing the clip leaves the main window and recorder alive, including when close-to-tray is disabled. Removing a folder preserves its recorded files.
+
+The user’s 0.1.9 diagnostics showed H.264/VP8/parser/demux plugins available, media code 4 before data loaded, and cancelled previews. The exact user clip and current target WebKit build are unavailable here. The release fixes identified controller/origin compatibility issues and adds token-free media request diagnostics; it does not claim the specific target failure was reproduced. The simulated recorder and host software decoders do not establish physical NVIDIA/Wayland performance.

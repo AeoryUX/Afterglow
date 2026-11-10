@@ -1,6 +1,6 @@
 # Afterglow security
 
-Version 0.1.9 retains the 0.1.3 protections and adds an owner-only local control channel for background save/toggle/show actions. The socket is mode 0600 inside a private runtime directory, and both ends validate SO_PEERCRED. New saves use the same storage-budget checks from the UI, tray and shortcuts. Legacy --save-replay pidfd fallback remains available for an older running version.
+Version 0.2.0 retains the 0.1.3 protections and adds an owner-only local control channel for background save/toggle/show actions. The socket is mode 0600 inside a private runtime directory, and both ends validate SO_PEERCRED. New saves use the same storage-budget checks from the UI, tray and shortcuts. Legacy --save-replay pidfd fallback remains available for an older running version.
 
 Preferences are stored atomically as mode 0600 in the app configuration directory. Shortcut inputs are validated against allowed modifiers and key names; the launched command is the shell-quoted current executable with a fixed action flag. Hyprland bindings are checked for collisions. Runtime binding changes use either the legacy keyword API or Lua API; Lua bindings retain their own handles so removal targets only Afterglow bindings. No general shell-execution API is exposed to the frontend.
 
@@ -21,7 +21,7 @@ Only one probe/export/preview conversion job runs at a time. Probe timeout is 10
 
 The Tauri capability grants only event listen/unlisten and the enumerated application commands to the local main window. External page navigation is denied. CSP restricts scripts to the bundled app and disables objects, base URLs, form submissions, and framing. The development server binds only to loopback.
 
-Clip playback binds only to 127.0.0.1 and requires a random 256-bit per-launch token. Requests must use the exact loopback Host; supplied foreign Origin headers are rejected. Clip path/name validation and no-follow file opening apply to streaming. Responses disable caching and content-type sniffing. The media endpoint does not offer upload or arbitrary filesystem APIs.
+Clip playback binds only to 127.0.0.1 and requires a random 256-bit per-launch token. Requests must use the exact loopback Host; ordinary foreign web Origin headers and duplicate Origin headers are rejected. Authenticated requests accept the app’s known custom-scheme origins and the opaque `null` origin emitted by some WebKit builds. A `null` origin alone does not authorize access: the exact Host and unpredictable token are required first. Clip path/name validation and no-follow file opening apply to streaming. Responses disable caching and content-type sniffing. The media endpoint does not offer upload or arbitrary filesystem APIs.
 
 Keep system WebKitGTK, FFmpeg, GPU Screen Recorder and NVIDIA drivers current through normal system updates. App dependency scans do not audit those system packages.
 
@@ -55,6 +55,12 @@ Managed graphical sessions use the XDG entry and a systemd user daemon-reload to
 
 ## Playback, deletion and window actions in 0.1.9
 
-Compatible previews use the same descriptor-based, network-restricted FFmpeg processing as exports, with a dedicated private cache, a 64 MiB output cap, a 180-second timeout and a cancellation generation checked by the child monitor. Preview files are served only through the existing secret-token/Host/Origin-protected loopback server, with the correct WebM MIME type and byte ranges. CORS headers are returned only for already-allowed app origins. Closing the editor cancels conversion and removes its completed cache file; old preview leftovers are cleared on startup. Original clip bytes remain unchanged.
+Compatible previews use the same descriptor-based, network-restricted FFmpeg processing as exports, with a dedicated private cache, a 64 MiB output cap, a 180-second timeout and a cancellation generation checked by the child monitor. Preview files are served only through the existing secret-token/Host/Origin-protected loopback server, with the correct WebM MIME type and byte ranges. CORS headers are returned only after the token/Host/origin checks, including the authenticated opaque-origin compatibility case described above. Closing the editor cancels conversion and removes its completed cache file; old preview leftovers are cleared on startup. Original clip bytes remain unchanged.
 
 Delete accepts a validated library filename, verifies a regular non-symlink file and unlinks it relative to the opened library directory. The UI confirms the filename before permanent deletion; Cancel does not call the native delete command. External opening accepts only an existing validated library clip and invokes xdg-open without a shell. The window command uses a fixed action enum and targets only the app's own main window; broad window or filesystem permissions are not granted. Playback diagnostic input is bounded before logging.
+
+## Local folders in 0.2.0
+
+Folder metadata is a private, atomically written configuration file (folders.json, mode 0600). Folder names and clip filenames are validated, folder IDs are generated from random bytes, duplicate names are rejected, and counts/serialized size are bounded. File access continues through the existing validated clip API; folder labels never become filesystem paths. Removing a folder only changes this metadata. A clip rename rolls back if saving its new assignment fails. Corrupt metadata is preserved and reported, rather than silently overwritten; capture and playback remain available. Exports keep their output if folder assignment fails and log the warning.
+
+Playback diagnostics report bounded HTTP request metadata without the token or full stream URL. The same-user control socket now exposes the running app version to --doctor. Closing a clip has a dedicated action and no app-window controls inside its dialog.

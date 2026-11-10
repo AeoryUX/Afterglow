@@ -28,6 +28,11 @@ pub fn doctor() {
             "User launcher override",
         );
     }
+    if let Ok(version) = crate::control::send("version") {
+        println!("Running backend: Afterglow {version}");
+    } else {
+        println!("Running backend: not running or an older control protocol");
+    }
     println!("A user launcher override takes precedence over the system launcher.");
     for tool in ["nvidia-smi", "gpu-screen-recorder", "ffmpeg"] {
         let args = if tool == "nvidia-smi" {

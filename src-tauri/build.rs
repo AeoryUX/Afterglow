@@ -22,6 +22,11 @@ fn main() {
             "prepare_preview",
             "open_clip_external",
             "delete_clip",
+            "get_folders",
+            "create_folder",
+            "rename_folder",
+            "remove_folder",
+            "assign_clip_folder",
         ]),
     ))
     .expect("Cannot build application permissions");

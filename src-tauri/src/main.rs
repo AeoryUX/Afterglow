@@ -3,6 +3,7 @@ mod activity;
 mod autostart;
 mod clips;
 mod control;
+mod folders;
 mod hotkeys;
 mod launcher;
 mod media;
@@ -779,18 +780,48 @@ async fn stop_replay(app: tauri::AppHandle) -> Result<(), String> {
     .map_err(|e| e.to_string())?
 }
 #[tauri::command]
+fn get_folders(app: tauri::AppHandle) -> Result<folders::Data, String> {
+    app.state::<folders::Folders>().snapshot()
+}
+#[tauri::command]
+fn create_folder(app: tauri::AppHandle, name: String) -> Result<folders::Data, String> {
+    app.state::<folders::Folders>().create(&name)
+}
+#[tauri::command]
+fn rename_folder(app: tauri::AppHandle, id: String, name: String) -> Result<folders::Data, String> {
+    app.state::<folders::Folders>().rename(&id, &name)
+}
+#[tauri::command]
+fn remove_folder(app: tauri::AppHandle, id: String) -> Result<folders::Data, String> {
+    app.state::<folders::Folders>().remove(&id)
+}
+#[tauri::command]
+fn assign_clip_folder(
+    app: tauri::AppHandle,
+    name: String,
+    folder_id: Option<String>,
+) -> Result<folders::Data, String> {
+    clips::open_clip(&output_dir(&app)?, &name)?;
+    app.state::<folders::Folders>()
+        .assign(&name, folder_id.as_deref())
+}
+#[tauri::command]
 fn list_clips(app: tauri::AppHandle) -> Result<Vec<clips::Clip>, String> {
     clips::list(&output_dir(&app)?)
 }
 #[tauri::command]
 fn delete_clip(app: tauri::AppHandle, name: String) -> Result<(), String> {
     clips::delete(&output_dir(&app)?, &name)?;
+    if let Err(e) = app.state::<folders::Folders>().assign(&name, None) {
+        activity::event(&app, &format!("Clip deleted; folder cleanup deferred: {e}"));
+    }
     activity::event(&app, &format!("Deleted clip: {name}"));
     Ok(())
 }
 #[tauri::command]
 fn rename_clip(app: tauri::AppHandle, name: String, new_name: String) -> Result<(), String> {
-    clips::rename(&output_dir(&app)?, &name, &new_name)
+    app.state::<folders::Folders>()
+        .renamed_clip(&output_dir(&app)?, &name, &new_name)
 }
 #[tauri::command]
 fn clip_media_url(
@@ -828,7 +859,15 @@ async fn trim_clip(
         let result =
             clips::trim_with_mode(&root, &name, start, end, room, precise.unwrap_or(false));
         match &result {
-            Ok(_) => activity::event(&app, "Trimmed copy exported"),
+            Ok(new) => {
+                if let Err(e) = app.state::<folders::Folders>().inherit(&name, new) {
+                    activity::event(
+                        &app,
+                        &format!("Trim exported; folder assignment failed: {e}"),
+                    );
+                }
+                activity::event(&app, "Trimmed copy exported");
+            }
             Err(error) => activity::event(&app, &format!("Trim export failed: {error}")),
         };
         result
@@ -886,9 +925,10 @@ fn report_playback_error(
     activity::event(
         &app,
         &format!(
-            "Playback {}: {}",
+            "Playback {}: {}; HTTP {}",
             name,
-            detail.chars().take(1200).collect::<String>()
+            detail.chars().take(1200).collect::<String>(),
+            app.state::<media::MediaServer>().diagnostics()
         ),
     );
     Ok(())
@@ -906,7 +946,9 @@ async fn prepare_preview(app: tauri::AppHandle, name: String) -> Result<String, 
             generation.load(Ordering::SeqCst) != ticket
         });
         if let Err(e) = &result {
-            activity::event(&app, &format!("Compatible preview: {e}"));
+            if e != "Preview cancelled" {
+                activity::event(&app, &format!("Compatible preview: {e}"));
+            }
         }
         result?;
         Ok(app.state::<media::MediaServer>().preview_url())
@@ -1290,6 +1332,7 @@ fn main() {
             let start_hidden=if login{!prefs.show_window_on_login}else{prefs.start_in_tray};
             if start_hidden {if let Some(window)=app.get_webview_window("main"){let _=window.hide();}}
             app.manage(preferences::PreferencesState(Mutex::new(prefs.clone())));
+            app.manage(folders::Folders::new(preferences_path(app.handle()).map_err(std::io::Error::other)?.with_file_name("folders.json")));
             let root = output_dir(app.handle()).map_err(std::io::Error::other)?;
             let cache=app.path().app_cache_dir()?.join("previews");fs::create_dir_all(cache.parent().unwrap())?;
             app.manage(preview::Preview::new(cache.clone()).map_err(std::io::Error::other)?);
@@ -1331,7 +1374,7 @@ fn main() {
             trim_clip,
             open_library,
             capture_options,
-            game_mode, get_preferences,save_preferences,apply_shortcuts,set_editor_active,window_action,report_playback_error,prepare_preview,open_clip_external,delete_clip
+            game_mode, get_preferences,save_preferences,apply_shortcuts,set_editor_active,window_action,report_playback_error,prepare_preview,open_clip_external,delete_clip,get_folders,create_folder,rename_folder,remove_folder,assign_clip_folder
         ])
         .build(tauri::generate_context!())
         .expect("Could not launch Afterglow")

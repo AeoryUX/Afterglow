@@ -26,6 +26,11 @@
     "allow-report-playback-error",
     "allow-prepare-preview",
     "allow-open-clip-external",
-    "allow-delete-clip"
+    "allow-delete-clip",
+    "allow-get-folders",
+    "allow-create-folder",
+    "allow-rename-folder",
+    "allow-remove-folder",
+    "allow-assign-clip-folder"
   ]
 }

@@ -88,6 +88,7 @@ pub fn start(app: tauri::AppHandle) -> Result<(), String> {
                     .read_line(&mut action)
                     .map_err(|e| e.to_string())?;
                 match action.trim() {
+                    "version" => Ok(env!("CARGO_PKG_VERSION").to_string()),
                     "save" => crate::request_save(&app).map(|_| "Clip save requested".to_string()),
                     "toggle" => crate::toggle_replay(&app).map(|_| "Replay toggled".into()),
                     "show" => {
