@@ -41,3 +41,5 @@ Version 0.1.9 adds explicit player controls, software video presentation, a comp
 Version 0.2.0 fixes clip closing, improves metadata-only playback and media-origin compatibility, adds local clip folders, and expands playback/running-version diagnostics. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.2.0
 
 Version 0.2.1 fixes fullscreen/enlargement, removes Unfiled, adds multi-clip move/delete actions, and plays compatible previews through local binary IPC/Blobs. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.2.1
+
+Version 0.2.2 fixes the Wayland blank-window regression by restoring the platform renderer and installs the missing Opus decoder through an explicit gst-plugins-base dependency. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.2.2
