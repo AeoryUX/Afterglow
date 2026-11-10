@@ -39,3 +39,5 @@ Version 0.1.8 adds desktop login startup and a window option, more built-in them
 Version 0.1.9 adds explicit player controls, software video presentation, a compatible temporary preview, per-clip Play/Edit/Open/Delete actions, and app window buttons. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.1.9
 
 Version 0.2.0 fixes clip closing, improves metadata-only playback and media-origin compatibility, adds local clip folders, and expands playback/running-version diagnostics. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.2.0
+
+Version 0.2.1 fixes fullscreen/enlargement, removes Unfiled, adds multi-clip move/delete actions, and plays compatible previews through local binary IPC/Blobs. Quit from the tray after upgrading and reopen. https://github.com/AeoryUX/Afterglow/releases/tag/v0.2.1
