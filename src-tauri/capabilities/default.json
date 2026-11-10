@@ -34,6 +34,8 @@
     "allow-assign-clip-folder",
     "allow-assign-clips-folder",
     "allow-delete-clips",
-    "allow-preview-bytes"
+    "allow-preview-bytes",
+    "allow-get-window-state",
+    "allow-set-window-fullscreen"
   ]
 }

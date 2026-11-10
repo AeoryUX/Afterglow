@@ -104,7 +104,7 @@ impl MediaServer {
             .unwrap_or_else(|| "unavailable".into())
     }
     pub fn preview_url(&self) -> String {
-        format!("{}preview.webm", self.prefix)
+        format!("{}preview/preview.mp4", self.prefix)
     }
     pub fn url(&self, name: &str) -> String {
         format!(
@@ -173,10 +173,10 @@ fn serve(
         let _ = request.respond(Response::empty(404));
         return;
     };
-    let preview = name == "preview.webm";
+    let preview = name == "preview/preview.mp4";
     let source = if preview {
         crate::private_fs::Directory::open(cache)
-            .and_then(|dir| dir.read("preview.webm"))
+            .and_then(|dir| dir.read("preview.mp4"))
             .map_err(|e| e.to_string())
     } else {
         crate::clips::open_clip(root, &name)
@@ -211,10 +211,7 @@ fn serve(
     }
     let length = end - start + 1;
     let mut headers = vec![
-        header(
-            "Content-Type",
-            if preview { "video/webm" } else { "video/mp4" },
-        ),
+        header("Content-Type", "video/mp4"),
         header("Accept-Ranges", "bytes"),
         header("Cache-Control", "no-store"),
         header("X-Content-Type-Options", "nosniff"),
@@ -235,7 +232,7 @@ fn serve(
         diagnostics,
         status.0,
         origin,
-        if preview { "WebM preview" } else { "MP4 clip" },
+        if preview { "MP4 preview" } else { "MP4 clip" },
     );
     let response = Response::new(
         status,
@@ -288,6 +285,7 @@ mod tests {
         ));
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("A play.mp4"), b"0123456789").unwrap();
+        fs::write(root.join("preview.mp4"), b"original").unwrap();
         let server = MediaServer::start(root.clone(), root.join("cache")).unwrap();
         let request = |url: &str, range: &str| {
             let (address, path) = url
@@ -320,14 +318,15 @@ mod tests {
         std::os::unix::fs::symlink("/etc/passwd", root.join("link.mp4")).unwrap();
         assert!(request(&server.url("link.mp4"), "").starts_with("HTTP/1.1 404"));
         fs::create_dir(root.join("cache")).unwrap();
-        fs::write(root.join("cache/preview.webm"), b"webm-preview").unwrap();
+        fs::write(root.join("cache/preview.mp4"), b"mp4-preview").unwrap();
+        assert!(request(&server.url("preview.mp4"), "").ends_with("original"));
         let preview = request(
             &server.preview_url(),
             "Origin: tauri://localhost\r\nRange: bytes=0-3\r\n",
         );
         assert!(preview.starts_with("HTTP/1.1 206"));
-        assert!(preview.contains("video/webm"));
-        assert!(preview.ends_with("webm"));
+        assert!(preview.contains("video/mp4"));
+        assert!(preview.ends_with("mp4-"));
         for origin in ["null", "http://tauri.localhost", "https://tauri.localhost"] {
             let opaque = request(
                 &server.url("A play.mp4"),

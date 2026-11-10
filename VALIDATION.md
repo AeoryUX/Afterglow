@@ -1,4 +1,4 @@
-# Afterglow 0.2.2 alpha validation
+# Afterglow 0.2.3 alpha validation
 
 Latest validation on 2026-11-10 in a Linux x86_64 cloud environment. The target desktop is CachyOS + Hyprland + Caelestia + NVIDIA GTX 1660 Super.
 
@@ -107,3 +107,15 @@ The new optional tests/check-wayland-render.py puts a known paint marker in the 
 The native Wayland smoke test also verifies auto-started simulated replay, MP4 playback progression, real VP8/Opus conversion, binary IPC/Blob playback progression, preservation of the source hash, and closing the clip while capture stays active. 44 optimized Rust tests and 11 JavaScript tests pass; the CLI owned-PID/negative-PID checks remain valid. The package contract test now requires gst-plugins-base as well as the existing decoder/parser packages. Arch’s current file lists establish that gst-plugins-base supplies libgstopus.so and gst-plugins-base-libs does not; the user’s doctor output explicitly reports opusdec missing.
 
 These tests use software Mesa/Weston and a simulated recorder, not a GTX 1660 Super or live Hyprland compositor. The Wayland painting regression is reproduced and fixed here; exact hardware capture performance and the user’s original MP4 remain outside direct reproduction.
+
+## 0.2.3 video overlays, corruption mitigation and fullscreen reconciliation
+
+44 Rust backend tests pass, including the real 1080p60 media case. Compatible output is checked for H.264 Constrained Baseline, 1280×720, YUV420p, zero B-frames and AAC audio. A strict full decode must succeed. Four decoded, downscaled frames at 0.5/1.5/2.5/3.5 seconds are compared against independently decoded original frames; each must stay below 12 mean absolute RGB levels. Invalid input must fail without modifying the source, exposing a completed preview or leaving temporary files. Cancellation and storage/path/private-file tests remain included. HTTP tests also prove that an original named preview.mp4 is not shadowed by the fixed preview route.
+
+15 JavaScript tests pass. Player checks cover metadata-only readiness, local MP4 Blob MIME/lifetime, external fullscreen exit, external/preexisting fullscreen ownership on close, idempotent enter/exit, Escape, rapid repeated enlargement and closing an unfinished request. The review also guards asynchronous Retry results and reflects actual pause/play state.
+
+Browser checks verify every playback/tool button and seek slider is inside the video, external fullscreen changes clear stale enlargement, Escape/F11 behavior, real Blob MP4 playback, and the existing folder/bulk-delete/partial-retry, settings, shortcut, export and responsive flows. Overlay controls remain keyboard-accessible and do not consume modifier chords such as Super+F.
+
+The compiled app is tested on Wayland/Weston with production IPC/CSP. The tests verify actual compositor UI/video pixels and compare four decoded native-preview frames against FFmpeg reference frames. Fullscreen is changed outside the player controller, then the layout must reconcile while the clip/source remain open. Repeated setters are idempotent; closing externally entered fullscreen preserves it; Escape exits player enlargement without closing the clip. Source bytes and background replay remain intact.
+
+The user confirms the original is clean in VLC/mpv, while the screenshot shows the VP8 compatible preview active with corrupted video. The release replaces that path with normalized H.264/AAC. The exact user clip and physical NVIDIA/Hyprland environment are not available here, so this is a targeted format change with decoded-frame validation rather than a claim that the user’s exact corruption was reproduced. Desktop mode changes are exercised through native window requests outside the player, not a real Hyprland Super+F keystroke.

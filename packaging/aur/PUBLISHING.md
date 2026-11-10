@@ -1,6 +1,6 @@
 # Publishing the one-command installer
 
-The prepared package is `afterglow-bin` 0.2.2-1, licensed GPL-3.0-only. After publication, users can run:
+The prepared package is `afterglow-bin` 0.2.3-1, licensed GPL-3.0-only. After publication, users can run:
 
 ```bash
 paru -S afterglow-bin
@@ -21,12 +21,12 @@ Paru reads .SRCINFO/PKGBUILD, downloads the pinned prebuilt native release, chec
 
 ## Host the release first
 
-Publish the prepared source under tag `v0.2.2` in AeoryUX/Afterglow. Host the exact `afterglow-0.2.2-linux-x86_64.tar.gz` used by this recipe, its checksum, and `afterglow-source.zip` as corresponding source in the packages branch under the immutable version tag. The release archive includes COPYING, LICENSE.md, and third-party notices. Do not replace the asset later without updating the AUR checksum and pkgrel.
+Publish the prepared source under tag `v0.2.3` in AeoryUX/Afterglow. Host the exact `afterglow-0.2.3-linux-x86_64.tar.gz` used by this recipe, its checksum, and `afterglow-source.zip` as corresponding source in the packages branch under the immutable version tag. The release archive includes COPYING, LICENSE.md, and third-party notices. Do not replace the asset later without updating the AUR checksum and pkgrel.
 
 The public source URL expected by this recipe is:
 
 ```
-https://raw.githubusercontent.com/AeoryUX/Afterglow/v0.2.2-packages/releases/v0.2.2/afterglow-0.2.2-linux-x86_64.tar.gz
+https://raw.githubusercontent.com/AeoryUX/Afterglow/v0.2.3-packages/releases/v0.2.3/afterglow-0.2.3-linux-x86_64.tar.gz
 ```
 
 ## Submit the package

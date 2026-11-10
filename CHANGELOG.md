@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.3 — 2026-11-10
+
+- Move playback and video-tool controls into the video as overlays, with pointer/focus visibility and keyboard access.
+- Replace the corrupted VP8-compatible-preview path with normalized H.264 Constrained Baseline / AAC MP4; validate decoded frames against the source. Originals remain unchanged.
+- Reconcile enlarged layout with external desktop fullscreen changes. Use serialized, idempotent fullscreen requests and track ownership so closing a clip preserves externally entered fullscreen.
+- Guard rapid enlargement, close-during-transition and stale Retry results; keep playback status consistent with pause/play events.
+- Keep the platform GUI renderer restored in 0.2.2.
+
+44 backend tests, 15 JavaScript tests, browser interaction checks and native Wayland video/window-state checks pass using a simulated recorder. The user’s exact corrupted clip and physical Hyprland shortcut are not directly reproduced.
+
 ## 0.2.2 — 2026-11-10
 
 - Remove the forced software GUI rendering policy introduced in 0.2.1. The 0.2.1 binary loaded its interface without painting it under Wayland; the platform renderer restores the visible window.

@@ -920,6 +920,54 @@ async fn trim_clip(
     .await
     .map_err(|e| e.to_string())?
 }
+#[derive(Default)]
+struct WindowTransition(Mutex<()>);
+#[derive(serde::Serialize)]
+struct WindowSnapshot {
+    fullscreen: bool,
+    maximized: bool,
+}
+fn window_snapshot(window: &tauri::WebviewWindow) -> Result<WindowSnapshot, String> {
+    Ok(WindowSnapshot {
+        fullscreen: window.is_fullscreen().map_err(|e| e.to_string())?,
+        maximized: window.is_maximized().map_err(|e| e.to_string())?,
+    })
+}
+#[tauri::command]
+fn get_window_state(app: tauri::AppHandle) -> Result<WindowSnapshot, String> {
+    window_snapshot(
+        &app.get_webview_window("main")
+            .ok_or("App window is not open")?,
+    )
+}
+#[tauri::command]
+async fn set_window_fullscreen(
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<WindowSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        // Serialize app requests, including close during an unfinished enlarge.
+        let transition = app.state::<WindowTransition>();
+        let _guard = transition.0.lock().map_err(|e| e.to_string())?;
+        let window = app
+            .get_webview_window("main")
+            .ok_or("App window is not open")?;
+        window.set_fullscreen(enabled).map_err(|e| e.to_string())?;
+        for _ in 0..30 {
+            let state = window_snapshot(&window)?;
+            if state.fullscreen == enabled {
+                return Ok(state);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        Err(
+            "The desktop did not confirm the fullscreen change. Try its fullscreen shortcut."
+                .into(),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum WindowAction {
@@ -1416,6 +1464,7 @@ fn main() {
         .manage(Recorder::default())
         .manage(ActiveSettings::default())
         .manage(GameMode::default())
+        .manage(WindowTransition::default())
         .manage(MemoryState::default())
         .manage(theme::Cache::default())
         .manage(hotkeys::HotkeyState::default())
@@ -1434,7 +1483,7 @@ fn main() {
             trim_clip,
             open_library,
             capture_options,
-            game_mode, get_preferences,save_preferences,apply_shortcuts,set_editor_active,window_action,assign_clips_folder,delete_clips,preview_bytes,report_playback_error,prepare_preview,open_clip_external,delete_clip,get_folders,create_folder,rename_folder,remove_folder,assign_clip_folder
+            game_mode, get_preferences,save_preferences,apply_shortcuts,set_editor_active,window_action,get_window_state,set_window_fullscreen,assign_clips_folder,delete_clips,preview_bytes,report_playback_error,prepare_preview,open_clip_external,delete_clip,get_folders,create_folder,rename_folder,remove_folder,assign_clip_folder
         ])
         .build(tauri::generate_context!())
         .expect("Could not launch Afterglow")

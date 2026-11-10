@@ -264,7 +264,16 @@ pub fn compatible_preview(
                 Ok(())
             });
         }
-        command.args(["-hide_banner","-v","error","-nostdin","-y","-protocol_whitelist","file","-threads","2","-f","mov","-i","/proc/self/fd/0","-map","0:v:0","-map","0:a:0?","-vf","scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,fps=30,format=yuv420p","-c:v","libvpx","-filter_threads","1","-deadline","realtime","-cpu-used","8","-threads","2","-b:v","1500k","-crf","12","-lag-in-frames","0","-auto-alt-ref","0","-c:a","libopus","-b:a","96k","-f","webm","/proc/self/fd/1"]);
+        command.args([
+            "-hide_banner", "-v", "error", "-xerror", "-nostdin", "-y",
+            "-protocol_whitelist", "file", "-hwaccel", "none", "-threads", "2",
+            "-f", "mov", "-i", "/proc/self/fd/0", "-map", "0:v:0", "-map", "0:a:0?",
+            "-vf", "scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,fps=30,format=yuv420p",
+            "-filter_threads", "1", "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
+            "-profile:v", "baseline", "-level:v", "3.1", "-bf", "0", "-g", "30", "-threads", "2",
+            "-crf", "22", "-maxrate", "2M", "-bufsize", "4M",
+            "-c:a", "aac", "-b:a", "128k", "-f", "mp4", "-movflags", "+faststart", "/proc/self/fd/1"
+        ]);
         crate::processing::run_cancellable(
             command,
             std::time::Duration::from_secs(180),
@@ -273,10 +282,10 @@ pub fn compatible_preview(
         if cancelled() {
             return Err("Preview cancelled".into());
         }
-        dir.rename(&temp, "preview.webm", false)
+        dir.rename(&temp, "preview.mp4", false)
             .map_err(|e| e.to_string())?;
         if cancelled() {
-            dir.remove("preview.webm");
+            dir.remove("preview.mp4");
             return Err("Preview cancelled".into());
         }
         Ok(())
@@ -398,7 +407,7 @@ mod media_tests {
         let cache = root.join("cache");
         fs::create_dir(&cache).unwrap();
         compatible_preview(&root, "original.mp4", &cache, || false).unwrap();
-        assert!(fs::metadata(cache.join("preview.webm")).unwrap().len() > 1000);
+        assert!(fs::metadata(cache.join("preview.mp4")).unwrap().len() > 1000);
         let result = crate::system::command("ffprobe")
             .args([
                 "-v",
@@ -406,20 +415,84 @@ mod media_tests {
                 "-select_streams",
                 "v:0",
                 "-show_entries",
-                "stream=codec_name,width,height",
+                "stream=codec_name,width,height,profile,pix_fmt,has_b_frames",
                 "-of",
                 "csv=p=0",
             ])
-            .arg(cache.join("preview.webm"))
+            .arg(cache.join("preview.mp4"))
             .output()
             .unwrap();
         let info = String::from_utf8_lossy(&result.stdout);
-        assert!(info.contains("vp8,1280,720"), "{info}");
-        fs::remove_file(cache.join("preview.webm")).unwrap();
+        assert!(
+            info.contains("h264,Constrained Baseline,1280,720,0,yuv420p"),
+            "{info}"
+        );
+        let audio = crate::system::command("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "csv=p=0",
+            ])
+            .arg(cache.join("preview.mp4"))
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&audio.stdout).trim(), "aac");
+        let decoded = crate::system::command("ffmpeg")
+            .args(["-v", "error", "-xerror", "-i"])
+            .arg(cache.join("preview.mp4"))
+            .args(["-f", "null", "-"])
+            .output()
+            .unwrap();
+        assert!(
+            decoded.status.success(),
+            "{}",
+            String::from_utf8_lossy(&decoded.stderr)
+        );
+        // Compare independent decoded frames to detect corruption, not just a
+        // present codec tag or an advancing playback clock.
+        let frame = |path: &Path, time: &str| {
+            let result = crate::system::command("ffmpeg")
+                .args(["-v", "error", "-ss", time, "-i"])
+                .arg(path)
+                .args([
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "scale=160:90:flags=area,format=rgb24",
+                    "-f",
+                    "rawvideo",
+                    "-",
+                ])
+                .output()
+                .unwrap();
+            assert!(result.status.success());
+            assert_eq!(result.stdout.len(), 160 * 90 * 3);
+            result.stdout
+        };
+        for time in ["0.5", "1.5", "2.5", "3.5"] {
+            let reference = frame(&source, time);
+            let actual = frame(&cache.join("preview.mp4"), time);
+            let mean_error = reference
+                .iter()
+                .zip(&actual)
+                .map(|(a, b)| a.abs_diff(*b) as f64)
+                .sum::<f64>()
+                / reference.len() as f64;
+            assert!(
+                mean_error < 12.0,
+                "Preview frame at {time}s is corrupted: RGB mean error {mean_error}"
+            );
+        }
+        fs::remove_file(cache.join("preview.mp4")).unwrap();
         assert!(compatible_preview(&root, "original.mp4", &cache, || true)
             .unwrap_err()
             .contains("cancelled"));
-        assert!(!cache.join("preview.webm").exists());
+        assert!(!cache.join("preview.mp4").exists());
         assert_eq!(fs::read(&source).unwrap(), original);
         let fast = trim_with_mode(&root, "original.mp4", 1.0, 2.5, None, false).unwrap();
         assert!(duration(&root, &fast).unwrap() > 0.1);
@@ -434,6 +507,18 @@ mod media_tests {
             .file_name()
             .to_string_lossy()
             .starts_with(".trim-")));
+        fs::write(root.join("broken.mp4"), b"invalid encoded data").unwrap();
+        assert!(compatible_preview(&root, "broken.mp4", &cache, || false).is_err());
+        assert!(!cache.join("preview.mp4").exists());
+        assert_eq!(
+            fs::read(root.join("broken.mp4")).unwrap(),
+            b"invalid encoded data"
+        );
+        assert!(!fs::read_dir(&cache).unwrap().any(|e| e
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".preview-")));
         fs::remove_dir_all(root).unwrap();
     }
 }

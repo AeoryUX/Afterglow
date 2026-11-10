@@ -18,6 +18,8 @@ fn main() {
             "apply_shortcuts",
             "set_editor_active",
             "window_action",
+            "get_window_state",
+            "set_window_fullscreen",
             "report_playback_error",
             "prepare_preview",
             "open_clip_external",

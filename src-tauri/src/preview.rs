@@ -16,7 +16,9 @@ impl Preview {
         if let Ok(entries) = std::fs::read_dir(&cache) {
             for entry in entries.flatten() {
                 if let Some(name) = entry.file_name().to_str() {
-                    if name == "preview.webm" || name.starts_with(".preview-") {
+                    if (name == "preview.webm" || name == "preview.mp4")
+                        || name.starts_with(".preview-")
+                    {
                         dir.remove(name);
                     }
                 }
@@ -31,6 +33,7 @@ impl Preview {
         self.generation.fetch_add(1, Ordering::SeqCst);
         if let Ok(dir) = crate::private_fs::Directory::open(&self.cache) {
             dir.remove("preview.webm");
+            dir.remove("preview.mp4");
         }
     }
 }
@@ -39,7 +42,7 @@ impl Preview {
 pub fn read_bytes(cache: &std::path::Path) -> Result<Vec<u8>, String> {
     use std::io::Read;
     let file = crate::private_fs::Directory::open(cache)
-        .and_then(|d| d.read("preview.webm"))
+        .and_then(|d| d.read("preview.mp4"))
         .map_err(|e| e.to_string())?;
     const LIMIT: u64 = 32 * 1024 * 1024;
     if file.metadata().map_err(|e| e.to_string())?.len() > LIMIT {
@@ -49,7 +52,7 @@ pub fn read_bytes(cache: &std::path::Path) -> Result<Vec<u8>, String> {
     file.take(LIMIT + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
-    if bytes.len() as u64 > LIMIT || !bytes.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) {
+    if bytes.len() as u64 > LIMIT || bytes.get(4..8) != Some(b"ftyp") {
         return Err("Preview is empty, incomplete, or too large".into());
     }
     Ok(bytes)
@@ -62,9 +65,9 @@ mod tests {
         let root =
             std::env::temp_dir().join(crate::private_fs::temporary_name("preview-bytes").unwrap());
         std::fs::create_dir(&root).unwrap();
-        let path = root.join("preview.webm");
-        std::fs::write(&path, [0x1a, 0x45, 0xdf, 0xa3, 0]).unwrap();
-        assert_eq!(read_bytes(&root).unwrap().len(), 5);
+        let path = root.join("preview.mp4");
+        std::fs::write(&path, b"\0\0\0\x18ftypisom").unwrap();
+        assert_eq!(read_bytes(&root).unwrap().len(), 12);
         let f = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
         f.set_len(32 * 1024 * 1024 + 1).unwrap();
         assert!(read_bytes(&root).is_err());
