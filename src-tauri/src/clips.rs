@@ -255,8 +255,8 @@ pub fn compatible_preview(
         unsafe {
             command.pre_exec(|| {
                 let cap = libc::rlimit {
-                    rlim_cur: 64 * 1024 * 1024,
-                    rlim_max: 64 * 1024 * 1024,
+                    rlim_cur: 32 * 1024 * 1024,
+                    rlim_max: 32 * 1024 * 1024,
                 };
                 if libc::setrlimit(libc::RLIMIT_FSIZE, &cap) != 0 {
                     return Err(std::io::Error::last_os_error());
@@ -264,7 +264,7 @@ pub fn compatible_preview(
                 Ok(())
             });
         }
-        command.args(["-hide_banner","-v","error","-nostdin","-y","-protocol_whitelist","file","-threads","2","-f","mov","-i","/proc/self/fd/0","-map","0:v:0","-map","0:a:0?","-vf","scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,fps=30,format=yuv420p","-c:v","libvpx","-deadline","realtime","-cpu-used","8","-threads","2","-b:v","1500k","-crf","12","-lag-in-frames","0","-auto-alt-ref","0","-c:a","libopus","-b:a","96k","-f","webm","/proc/self/fd/1"]);
+        command.args(["-hide_banner","-v","error","-nostdin","-y","-protocol_whitelist","file","-threads","2","-f","mov","-i","/proc/self/fd/0","-map","0:v:0","-map","0:a:0?","-vf","scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,fps=30,format=yuv420p","-c:v","libvpx","-filter_threads","1","-deadline","realtime","-cpu-used","8","-threads","2","-b:v","1500k","-crf","12","-lag-in-frames","0","-auto-alt-ref","0","-c:a","libopus","-b:a","96k","-f","webm","/proc/self/fd/1"]);
         crate::processing::run_cancellable(
             command,
             std::time::Duration::from_secs(180),

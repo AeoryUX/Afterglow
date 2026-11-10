@@ -27,6 +27,9 @@ fn main() {
             "rename_folder",
             "remove_folder",
             "assign_clip_folder",
+            "assign_clips_folder",
+            "delete_clips",
+            "preview_bytes",
         ]),
     ))
     .expect("Cannot build application permissions");

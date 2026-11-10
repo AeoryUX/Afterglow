@@ -31,6 +31,9 @@
     "allow-create-folder",
     "allow-rename-folder",
     "allow-remove-folder",
-    "allow-assign-clip-folder"
+    "allow-assign-clip-folder",
+    "allow-assign-clips-folder",
+    "allow-delete-clips",
+    "allow-preview-bytes"
   ]
 }

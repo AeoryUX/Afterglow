@@ -59,9 +59,24 @@ pub fn doctor() {
             Err(error) => println!("{tool}: {error}"),
         };
     }
-    for codec in ["avdec_h264", "h264parse", "vp8dec", "matroskademux"] {
+    for codec in [
+        "playbin3",
+        "qtdemux",
+        "appsrc",
+        "appsink",
+        "videoconvert",
+        "audioconvert",
+        "audioresample",
+        "autoaudiosink",
+        "avdec_h264",
+        "h264parse",
+        "avdec_aac",
+        "vp8dec",
+        "opusdec",
+        "matroskademux",
+    ] {
         match crate::system::command("gst-inspect-1.0")
-            .args(["--exists", codec])
+            .args([codec])
             .output()
         {
             Ok(out) => println!(

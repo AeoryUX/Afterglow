@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 — 2026-11-10
+
+- Use explicit fullscreen/windowed actions for the app and add Enlarge/Shrink to the player. F11 toggles fullscreen; Escape shrinks the player before closing it.
+- Remove the Unfiled library tile. Unassigned clips remain in All clips, and No folder removes assignments.
+- Select clips individually or select visible clips, move selections to folders, clear selection and delete with filename confirmation. Report partial deletion and retry only failed items.
+- Play compatible previews from bounded native binary IPC/local Blobs instead of HTTP; revoke Blob URLs on close/reset and preserve original MP4 files. Limit preview output/transfer to 32 MiB.
+- Set software WebKit composition, serialize editor transitions, fix opening after a status refresh, start media independently of duration probing, and expand playback factory checks and preview-completion diagnostics.
+
+44 Rust tests, 11 JavaScript tests, browser interactions and native managed-window/MP4/Blob WebM/multi-selection checks passed with a simulated recorder. The user’s exact target playback failure remains subject to on-device confirmation.
+
 ## 0.2.0 — 2026-11-10
 
 - Replace app window buttons inside the clip editor with a dedicated Close clip action. Closing a preview keeps the main window and background replay alive.

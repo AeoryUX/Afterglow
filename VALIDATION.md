@@ -1,11 +1,11 @@
-# Afterglow 0.2.0 alpha validation
+# Afterglow 0.2.1 alpha validation
 
 Latest validation on 2026-11-10 in a Linux x86_64 cloud environment. The target desktop is CachyOS + Hyprland + Caelestia + NVIDIA GTX 1660 Super.
 
 ## Passed
 
 - Vite production build and optimized, stripped Rust/Tauri release build.
-- Thirty-eight optimized Rust backend/media tests, including real 1080p60 FFmpeg fast and precise trimming, original preservation, filename/path boundaries, HTTP byte ranges, capture settings, process-tree memory, and retaining/recovering a valid palette while a Caelestia scheme is partially written.
+- 44 optimized Rust backend/media tests, including real 1080p60 FFmpeg fast and precise trimming, original preservation, filename/path boundaries, HTTP byte ranges, capture settings, process-tree memory, and retaining/recovering a valid palette while a Caelestia scheme is partially written.
 - Seven JavaScript preference/key-recorder tests: corrupt/legacy settings recover safe defaults and excessive encoded replay budgets are bounded.
 - Browser preview: capture guard, navigation, saved preferences, search, 900px/600px layouts, and no JavaScript errors.
 - Browser with a simulated native bridge: start/save/stop, rename, trim, open-folder, delayed monitor detection, forced diagnostic refresh, and Home capture controls without discarding unsaved Settings drafts.
@@ -87,3 +87,13 @@ WebKit's software video presentation flag was checked against upstream GStreamer
 Browser tests exercise folder creation, duplicate-name errors, move/filter, rename and removal that keeps clips, metadata-only Play readiness, and the absence of app-window actions inside the clip dialog. Existing real MP4/WebM playback, seek, mute/volume, fallback, settings, shortcuts, export failure/retry and responsive flows remain covered. A native compiled WebKit test verifies decoded MP4 frames, progressing MP4/WebM playback, conversion cancellation, folder creation/move, clip rename, real FFmpeg export inheritance and folder persistence across backend restart. Closing the clip leaves the main window and recorder alive, including when close-to-tray is disabled. Removing a folder preserves its recorded files.
 
 The user’s 0.1.9 diagnostics showed H.264/VP8/parser/demux plugins available, media code 4 before data loaded, and cancelled previews. The exact user clip and current target WebKit build are unavailable here. The release fixes identified controller/origin compatibility issues and adds token-free media request diagnostics; it does not claim the specific target failure was reproduced. The simulated recorder and host software decoders do not establish physical NVIDIA/Wayland performance.
+
+## 0.2.1 fullscreen, selection, and local preview transport
+
+44 optimized Rust tests and 11 JavaScript tests pass. New backend tests reject invalid/duplicate/oversized selections before deletion, report partial deletion without touching unselected files, preserve atomic folder assignments, and reject symlink/oversized binary preview reads. Controller tests cover Blob creation/revocation and enlargement/Escape restoration.
+
+Browser tests exercise selection toggles, select-visible, folder moves/filtering, delete Cancel/confirmation, injected partial failure and retry, removal of Unfiled, an injected refresh during delayed editor activation, playing media before a delayed duration probe completes, actual MP4/Blob WebM playback, player enlargement/Escape, fullscreen control/F11 dispatch and responsive layouts. Existing settings, storage, automatic shortcuts, export failure/retry and unsaved-editor flows still pass.
+
+Native WebKitGTK tests use the compiled app, actual Rust IPC and production CSP. An Xfwm-managed Xvfb window enters fullscreen with larger actual dimensions and returns to its original size. Player enlargement enters fullscreen, and cancellation shrinks without closing the clip. A deliberately failed original URL triggers real FFmpeg conversion, native binary IPC, local Blob WebM loading and advancing playback; MP4 frame pixels and source hash preservation are also checked. Native selection tests move two clips to a folder, cancel then confirm bulk deletion, and preserve the unselected clip. Real trimmed export and 20-second background recording/saving/reopening are checked. Intentional web-process teardown invalidates the automation page; reopened window visibility is verified through the X window tree and live backend/recorder checks.
+
+The user’s 0.2.0 log shows HTTP 200 responses with the expected app Origin, so rejected media requests are not established as the cause. The new compatible-preview transport bypasses HTTP and the GUI uses software WebKit composition, but the exact user clip and WebKit 2.54/NVIDIA/Hyprland combination remain unavailable for direct reproduction. Arch’s current package file lists were reviewed: playback factories already come from gst-plugins-base-libs, so no speculative extra codec dependency was added. --doctor now loads more actual factories instead of querying only four cached registry entries. Software preview and fixture results do not establish physical NVIDIA recording performance or a universal RAM ceiling.

@@ -12,6 +12,7 @@ mod preferences;
 mod preview;
 mod private_fs;
 mod processing;
+mod selection;
 mod sound;
 mod storage;
 mod system;
@@ -806,6 +807,50 @@ fn assign_clip_folder(
         .assign(&name, folder_id.as_deref())
 }
 #[tauri::command]
+fn assign_clips_folder(
+    app: tauri::AppHandle,
+    names: Vec<String>,
+    folder_id: Option<String>,
+) -> Result<folders::Data, String> {
+    selection::validate(&names)?;
+    let root = output_dir(&app)?;
+    for name in &names {
+        clips::open_clip(&root, name)?;
+    }
+    app.state::<folders::Folders>()
+        .assign_many(&names, folder_id.as_deref())
+}
+#[tauri::command]
+fn delete_clips(app: tauri::AppHandle, names: Vec<String>) -> Result<selection::Deleted, String> {
+    let result = selection::delete(&output_dir(&app)?, &names)?;
+    if !result.deleted.is_empty() {
+        if let Err(error) = app.state::<folders::Folders>().forget_many(&result.deleted) {
+            activity::event(
+                &app,
+                &format!("Selected clips deleted; folder cleanup deferred: {error}"),
+            );
+        }
+    }
+    activity::event(
+        &app,
+        &format!(
+            "Selected clips: {} deleted, {} failed",
+            result.deleted.len(),
+            result.failed.len()
+        ),
+    );
+    Ok(result)
+}
+#[tauri::command]
+async fn preview_bytes(app: tauri::AppHandle) -> Result<tauri::ipc::Response, String> {
+    let cache = app.state::<preview::Preview>().cache.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        preview::read_bytes(&cache).map(tauri::ipc::Response::new)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
 fn list_clips(app: tauri::AppHandle) -> Result<Vec<clips::Clip>, String> {
     clips::list(&output_dir(&app)?)
 }
@@ -880,6 +925,8 @@ async fn trim_clip(
 enum WindowAction {
     Minimize,
     Maximize,
+    Fullscreen,
+    Windowed,
     Close,
     Drag,
     State,
@@ -897,6 +944,14 @@ fn window_action(app: tauri::AppHandle, action: WindowAction) -> Result<bool, St
                 window.minimize().map_err(|e| e.to_string())?;
             }
         }
+        WindowAction::Fullscreen => {
+            window
+                .set_fullscreen(!window.is_fullscreen().map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+        }
+        WindowAction::Windowed => {
+            window.set_fullscreen(false).map_err(|e| e.to_string())?;
+        }
         WindowAction::Maximize => {
             if window.is_maximized().map_err(|e| e.to_string())? {
                 window.unmaximize()
@@ -913,7 +968,7 @@ fn window_action(app: tauri::AppHandle, action: WindowAction) -> Result<bool, St
         }
         WindowAction::State => (),
     }
-    Ok(window.is_maximized().unwrap_or(false))
+    Ok(window.is_fullscreen().unwrap_or(false))
 }
 #[tauri::command]
 fn report_playback_error(
@@ -951,6 +1006,7 @@ async fn prepare_preview(app: tauri::AppHandle, name: String) -> Result<String, 
             }
         }
         result?;
+        activity::event(&app, "Compatible preview ready");
         Ok(app.state::<media::MediaServer>().preview_url())
     })
     .await
@@ -1073,8 +1129,14 @@ fn save_from_cli() -> Result<(), String> {
     Ok(())
 }
 fn reduce_web_cache(window: &tauri::WebviewWindow) {
-    use webkit2gtk::{WebContextExt, WebViewExt};
+    use webkit2gtk::{SettingsExt, WebContextExt, WebViewExt};
     let _ = window.with_webview(|webview| {
+        if let Some(settings) = webview.inner().settings() {
+            settings.set_enable_media(true);
+            settings.set_enable_fullscreen(true);
+            settings
+                .set_hardware_acceleration_policy(webkit2gtk::HardwareAccelerationPolicy::Never);
+        }
         if let Some(context) = webview.inner().context() {
             context.set_cache_model(webkit2gtk::CacheModel::DocumentViewer);
         }
@@ -1374,7 +1436,7 @@ fn main() {
             trim_clip,
             open_library,
             capture_options,
-            game_mode, get_preferences,save_preferences,apply_shortcuts,set_editor_active,window_action,report_playback_error,prepare_preview,open_clip_external,delete_clip,get_folders,create_folder,rename_folder,remove_folder,assign_clip_folder
+            game_mode, get_preferences,save_preferences,apply_shortcuts,set_editor_active,window_action,assign_clips_folder,delete_clips,preview_bytes,report_playback_error,prepare_preview,open_clip_external,delete_clip,get_folders,create_folder,rename_folder,remove_folder,assign_clip_folder
         ])
         .build(tauri::generate_context!())
         .expect("Could not launch Afterglow")

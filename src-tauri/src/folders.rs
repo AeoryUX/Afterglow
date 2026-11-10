@@ -136,6 +136,32 @@ impl Folders {
             Ok(())
         })
     }
+    pub fn assign_many(&self, names: &[String], id: Option<&str>) -> Result<Data, String> {
+        crate::selection::validate(names)?;
+        self.change(|d| {
+            if let Some(id) = id {
+                if !d.folders.iter().any(|f| f.id == id) {
+                    return Err("Folder no longer exists".into());
+                }
+            }
+            for name in names {
+                d.assignments.remove(name);
+                if let Some(id) = id {
+                    d.assignments.insert(name.clone(), id.into());
+                }
+            }
+            Ok(())
+        })
+    }
+    pub fn forget_many(&self, names: &[String]) -> Result<(), String> {
+        self.change(|d| {
+            for name in names {
+                d.assignments.remove(name);
+            }
+            Ok(())
+        })
+        .map(|_| ())
+    }
     pub fn renamed_clip(&self, root: &Path, old: &str, new: &str) -> Result<(), String> {
         let mut slot = self.data.lock().map_err(|e| e.to_string())?;
         let mut next = slot.clone()?;
@@ -213,6 +239,31 @@ mod tests {
         store.remove(&id).unwrap();
         assert!(store.snapshot().unwrap().assignments.is_empty());
         assert_eq!(std::fs::read(root.join("new.mp4")).unwrap(), b"original");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn bulk_assignment_is_atomic_and_removal_keeps_other_assignments() {
+        let root =
+            std::env::temp_dir().join(crate::private_fs::temporary_name("bulk-folders").unwrap());
+        std::fs::create_dir(&root).unwrap();
+        let store = Folders::new(root.join("folders.json"));
+        let id = store.create("Games").unwrap().folders[0].id.clone();
+        let names = vec!["one.mp4".into(), "two.mp4".into()];
+        store.assign_many(&names, Some(&id)).unwrap();
+        assert_eq!(store.snapshot().unwrap().assignments.len(), 2);
+        assert!(store.assign_many(&names, Some("missing")).is_err());
+        assert!(store
+            .assign_many(&["one.mp4".into(), "../bad.mp4".into()], None)
+            .is_err());
+        assert_eq!(store.snapshot().unwrap().assignments.len(), 2);
+        store.forget_many(&["one.mp4".into()]).unwrap();
+        assert_eq!(
+            Folders::new(root.join("folders.json"))
+                .snapshot()
+                .unwrap()
+                .assignments["two.mp4"],
+            id
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
     #[test]

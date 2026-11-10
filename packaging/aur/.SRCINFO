@@ -1,6 +1,6 @@
 pkgbase = afterglow-bin
 	pkgdesc = Instant replay and local gameplay clips for Linux
-	pkgver = 0.2.0
+	pkgver = 0.2.1
 	pkgrel = 1
 	url = https://github.com/AeoryUX/Afterglow
 	arch = x86_64
@@ -23,7 +23,7 @@ pkgbase = afterglow-bin
 	conflicts = afterglow
 	options = !strip
 	options = !debug
-	source = afterglow-0.2.0-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v0.2.0-packages/releases/v0.2.0/afterglow-0.2.0-linux-x86_64.tar.gz
-	sha256sums = f10cf32e33373f1a153fb215c61cf94f4a3e3f6d2466720e7f01276da4244b42
+	source = afterglow-0.2.1-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v0.2.1-packages/releases/v0.2.1/afterglow-0.2.1-linux-x86_64.tar.gz
+	sha256sums = 51cd169b7f4e1a5d86581525863e630a917474ffac58a5dfc63b69171feebbc8
 
 pkgname = afterglow-bin
