@@ -1,18 +1,18 @@
 # Maintainer: AUR maintainer account pending
 # Native releases are public; an AUR entry has not been submitted.
 pkgname=afterglow-bin
-pkgver=0.2.1
+pkgver=0.2.2
 pkgrel=1
 url='https://github.com/AeoryUX/Afterglow'
 pkgdesc='Instant replay and local gameplay clips for Linux'
 arch=('x86_64')
 license=('GPL-3.0-only')
-depends=('glibc>=2.39' 'gcc-libs' 'gtk3' 'webkit2gtk-4.1' 'libayatana-appindicator' 'ffmpeg' 'pipewire-audio' 'gst-libav' 'gst-plugins-good' 'gst-plugins-bad-libs' 'xdg-utils' 'desktop-file-utils' 'gpu-screen-recorder' 'nvidia-utils')
+depends=('glibc>=2.39' 'gcc-libs' 'gtk3' 'webkit2gtk-4.1' 'libayatana-appindicator' 'ffmpeg' 'pipewire-audio' 'gst-libav' 'gst-plugins-base' 'gst-plugins-good' 'gst-plugins-bad-libs' 'xdg-utils' 'desktop-file-utils' 'gpu-screen-recorder' 'nvidia-utils')
 provides=('afterglow')
 conflicts=('afterglow')
 options=('!strip' '!debug')
 source=("afterglow-${pkgver}-linux-x86_64.tar.gz::https://raw.githubusercontent.com/AeoryUX/Afterglow/v${pkgver}-packages/releases/v${pkgver}/afterglow-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('51cd169b7f4e1a5d86581525863e630a917474ffac58a5dfc63b69171feebbc8')
+sha256sums=('ae54d8d9a005aaa33d92d4ec2a440ee07d58620cfd46a7ee5e95e0c09180a92f')
 
 package() {
     local release="$srcdir/afterglow-${pkgver}-linux-x86_64"

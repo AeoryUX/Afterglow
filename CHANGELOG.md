@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 — 2026-11-10
+
+- Remove the forced software GUI rendering policy introduced in 0.2.1. The 0.2.1 binary loaded its interface without painting it under Wayland; the platform renderer restores the visible window.
+- Add gst-plugins-base explicitly to both package recipes, supplying the missing Opus decoder needed by compatible previews. Artifact checks now require this dependency.
+- Add an optional native Wayland paint regression test that checks actual compositor pixels.
+
+Validated with 44 Rust tests, 11 JavaScript tests, Wayland compositor screenshots and native MP4/VP8-Opus Blob playback. The recorder remains simulated.
+
 ## 0.2.1 — 2026-11-10
 
 - Use explicit fullscreen/windowed actions for the app and add Enlarge/Shrink to the player. F11 toggles fullscreen; Escape shrinks the player before closing it.

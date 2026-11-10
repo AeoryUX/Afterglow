@@ -1,4 +1,4 @@
-# Afterglow 0.2.1 alpha validation
+# Afterglow 0.2.2 alpha validation
 
 Latest validation on 2026-11-10 in a Linux x86_64 cloud environment. The target desktop is CachyOS + Hyprland + Caelestia + NVIDIA GTX 1660 Super.
 
@@ -97,3 +97,13 @@ Browser tests exercise selection toggles, select-visible, folder moves/filtering
 Native WebKitGTK tests use the compiled app, actual Rust IPC and production CSP. An Xfwm-managed Xvfb window enters fullscreen with larger actual dimensions and returns to its original size. Player enlargement enters fullscreen, and cancellation shrinks without closing the clip. A deliberately failed original URL triggers real FFmpeg conversion, native binary IPC, local Blob WebM loading and advancing playback; MP4 frame pixels and source hash preservation are also checked. Native selection tests move two clips to a folder, cancel then confirm bulk deletion, and preserve the unselected clip. Real trimmed export and 20-second background recording/saving/reopening are checked. Intentional web-process teardown invalidates the automation page; reopened window visibility is verified through the X window tree and live backend/recorder checks.
 
 The user’s 0.2.0 log shows HTTP 200 responses with the expected app Origin, so rejected media requests are not established as the cause. The new compatible-preview transport bypasses HTTP and the GUI uses software WebKit composition, but the exact user clip and WebKit 2.54/NVIDIA/Hyprland combination remain unavailable for direct reproduction. Arch’s current package file lists were reviewed: playback factories already come from gst-plugins-base-libs, so no speculative extra codec dependency was added. --doctor now loads more actual factories instead of querying only four cached registry entries. Software preview and fixture results do not establish physical NVIDIA recording performance or a universal RAM ceiling.
+
+## 0.2.2 Wayland blank-window regression and Opus packaging
+
+The 0.2.1 binary was tested under a private Weston 14 Wayland compositor with WebKitGTK 2.54. The DOM loaded, but a compositor screenshot contained an unpainted window. This reproduces the blank-window regression at the display level; it was missed by the previous X11/DOM/native snapshot checks. Removing HardwareAccelerationPolicy::Never restores visible Home navigation and controls in the actual Wayland compositor capture. The GUI now uses WebKit’s platform rendering policy; software media presentation/decoder preferences remain unchanged.
+
+The new optional tests/check-wayland-render.py puts a known paint marker in the loaded app and verifies it in a compositor screenshot. It requires an isolated Wayland QA session, WebKitWebDriver, weston-screenshooter with output capture enabled, and Pillow. It checks display pixels rather than trusting DOM readiness or WebKit’s own offscreen snapshot. This native regression check passes with 0.2.2.
+
+The native Wayland smoke test also verifies auto-started simulated replay, MP4 playback progression, real VP8/Opus conversion, binary IPC/Blob playback progression, preservation of the source hash, and closing the clip while capture stays active. 44 optimized Rust tests and 11 JavaScript tests pass; the CLI owned-PID/negative-PID checks remain valid. The package contract test now requires gst-plugins-base as well as the existing decoder/parser packages. Arch’s current file lists establish that gst-plugins-base supplies libgstopus.so and gst-plugins-base-libs does not; the user’s doctor output explicitly reports opusdec missing.
+
+These tests use software Mesa/Weston and a simulated recorder, not a GTX 1660 Super or live Hyprland compositor. The Wayland painting regression is reproduced and fixed here; exact hardware capture performance and the user’s original MP4 remain outside direct reproduction.

@@ -1134,8 +1134,6 @@ fn reduce_web_cache(window: &tauri::WebviewWindow) {
         if let Some(settings) = webview.inner().settings() {
             settings.set_enable_media(true);
             settings.set_enable_fullscreen(true);
-            settings
-                .set_hardware_acceleration_policy(webkit2gtk::HardwareAccelerationPolicy::Never);
         }
         if let Some(context) = webview.inner().context() {
             context.set_cache_model(webkit2gtk::CacheModel::DocumentViewer);

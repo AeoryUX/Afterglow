@@ -23,7 +23,8 @@ with tempfile.TemporaryDirectory() as folder:
     assert security.stat().st_mode & 0o777 == 0o644
     assert 'Remaining boundaries' in security.read_text()
     metadata = (root / '.PKGINFO').read_text()
-    assert 'depend = desktop-file-utils\n' in metadata
+    for dependency in ['desktop-file-utils','gst-plugins-base','gst-plugins-good','gst-plugins-bad-libs','gst-libav']:
+        assert f'depend = {dependency}\n' in metadata, f'Missing required runtime dependency: {dependency}'
     assert 'Exec=/usr/bin/afterglow\n' in desktop.read_text()
     assert 'TryExec=/usr/bin/afterglow\n' in desktop.read_text()
     assert 'NoDisplay=true' not in desktop.read_text()
